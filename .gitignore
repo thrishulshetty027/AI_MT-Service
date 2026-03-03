@@ -1,1 +1,9 @@
 .env
+generated_tests/
+processed_prs.json
+__pycache__/
+.vscode/
+*.pyc
+*.pyo
+*.log
+nul

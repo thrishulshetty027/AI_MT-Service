@@ -1,14 +1,38 @@
-{
-  "thrishulshetty027/Simple-File-System": [
-    20,
-    18,
-    17,
-    16,
-    15,
-    14,
-    13
-  ],
-  "ERaith/eraith-dev": [
-    1
-  ]
-}
+[
+    {
+        "pr_number": 49,
+        "status": "completed"
+    },
+    {
+        "pr_number": 48,
+        "status": "completed"
+    },
+    {
+        "pr_number": 47,
+        "status": "completed"
+    },
+    {
+        "pr_number": 46,
+        "status": "completed"
+    },
+    {
+        "pr_number": 50,
+        "status": "completed"
+    },
+    {
+        "pr_number": 51,
+        "status": "completed"
+    },
+    {
+        "pr_number": 52,
+        "status": "completed"
+    },
+    {
+        "pr_number": 53,
+        "status": "completed"
+    },
+    {
+        "pr_number": 54,
+        "status": "completed"
+    }
+]
