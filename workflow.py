@@ -1,13 +1,18 @@
 import os
-import sys
-import re
 from datetime import datetime
 import requests
 from dotenv import load_dotenv
 
+load_dotenv()
+
+llm_type = os.getenv("USE_LLM_TYPE", "vio")
+print(f"[INFO] Using LLM type: {llm_type.upper()}")
 from testcase_generator import generate_testcases
 
-load_dotenv()
+if llm_type == "glm":
+    from glm_client import call_glm_4_7_flash as call_llm
+else:
+    from vio_llm_client import call_vio_llm as call_llm
 
 GENERATED_FOLDER = "generated_tests"
 PROCESSED_FILE = "processed_prs.json"
@@ -258,9 +263,8 @@ int main(void)
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
 """
-    from glm_client import call_glm_4_7_flash
-    return call_glm_4_7_flash(prompt + "C CODE DIFF:" + diff_content)
 
+    return call_llm(prompt + "C CODE DIFF:" + diff_content)
 def get_newest_pr_diff_files():
     """
     Get the newest PR diff files from the generated_tests folder.
@@ -438,8 +442,8 @@ def main(repo_name=None):
     patches_count = len(latest_patches.split('\n'))
     print(f"[OK] Extracted {patches_count} lines of latest patches")
 
-    # Step 3: Use GLM 4.7 Flash to generate test cases for the latest patches
-    print("\nStep 3: Generating test cases using GLM 4.7 Flash...")
+    # Step 3: Use the configured LLM to generate test cases for the latest patches
+    print("\nStep 3: Generating test cases...")
 
     testcases_file = f"pr_{pr_number}_testcases.md"
     module_file_c = f"pr_{pr_number}_module_tests.c"
