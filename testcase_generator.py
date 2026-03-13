@@ -1,5 +1,19 @@
+import os
 import re
-from glm_client import call_glm_4_7_flash
+from dotenv import load_dotenv
+
+load_dotenv()
+
+llm_type = os.getenv("USE_LLM_TYPE", "vio")
+
+print(f"[INFO] Using LLM type: {llm_type.upper()}")
+
+if llm_type == "glm":
+    from glm_client import call_glm_4_7_flash as call_llm
+    print("[INFO] Will use GLM (opencode CLI)")
+else:
+    from vio_llm_client import call_vio_llm as call_llm
+    print("[INFO] Will use VIO LLM")
 
 # =====================================================
 # STRICT SYSTEM PROMPT
@@ -101,7 +115,7 @@ def generate_testcases(diff_text):
 
     prompt = SYSTEM_PROMPT + "\n\nC CODE DIFF:\n" + diff_text
 
-    response = call_glm_4_7_flash(prompt)
+    response = call_llm(prompt)
 
     return clean_output(response)
 
