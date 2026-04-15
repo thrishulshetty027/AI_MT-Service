@@ -3,10 +3,15 @@ from datetime import datetime
 import requests
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 llm_type = os.getenv("USE_LLM_TYPE", "vio")
+cantata_integration_enabled = os.getenv("INTEGRATE_CANTATA", "true").lower() == "true"
+
 print(f"[INFO] Using LLM type: {llm_type.upper()}")
+print(f"[INFO] Cantata integration: {'ENABLED' if cantata_integration_enabled else 'DISABLED'}")
+
+from cantata_integration import generate_cantata_tests
 from testcase_generator import generate_testcases
 
 if llm_type == "glm":
@@ -201,70 +206,150 @@ def save_to_markdown(content, filename, title=""):
     print(f"Saved: {filename}")
     return filename
 
+def parse_test_cases_from_markdown(testcases_file):
+    """
+    Parse test case definitions from markdown file and convert to structured format
+    
+    Args:
+        testcases_file: Path to the test cases markdown file
+        
+    Returns:
+        List of test case dictionaries
+    """
+    import re
+    
+    test_cases = []
+    
+    try:
+        with open(testcases_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Try to parse as markdown table format
+        if '|' in content:
+            lines = content.split('\n')
+            in_table = False
+            headers = []
+            
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                    
+                # Check if this is a header row (contains column names)
+                if '|' in line and ('Test Case ID' in line or 'Test Scenario' in line or 'Function Name' in line):
+                    headers = [h.strip() for h in line.split('|')[1:-1]]
+                    in_table = True
+                    continue
+                    
+                # Skip separator row
+                if in_table and line.startswith('|---'):
+                    continue
+                    
+                # Process data rows
+                if in_table and line.startswith('|'):
+                    values = [v.strip() for v in line.split('|')[1:-1]]
+                    if len(values) == len(headers):
+                        test_case = dict(zip(headers, values))
+                        test_cases.append(test_case)
+            
+            # If no header found but table data exists, create default headers
+            if not in_table and '|' in content:
+                # Count the number of pipes to determine column count
+                sample_line = [line for line in lines if '|' in line and not line.startswith('---') and not line.strip().startswith('#')][0]
+                num_columns = sample_line.count('|') - 1
+                headers = ['Test Case ID', 'Function Name', 'Test Scenario', 'Input Values', 'Pre-Conditions', 'Test Steps', 'Expected Result', 'Post-Conditions', 'Test Type'][:num_columns]
+                
+                # Reparse with default headers
+                for line in lines:
+                    line = line.strip()
+                    if not line or line.startswith('#') or line.startswith('|---'):
+                        continue
+                    if '|' in line:
+                        values = [v.strip() for v in line.split('|')[1:-1]]
+                        if len(values) == len(headers):
+                            test_case = dict(zip(headers, values))
+                            test_cases.append(test_case)
+        
+        # If no table found, try to parse function stub format
+        if not test_cases:
+            # Parse C function stub format
+            function_pattern = r'/\*\s*\*\s*Test Case:\s*([^\n]*)\s*\*\s*Description:\s*([^\n]*)\s*\*/\s*void\s+(\w+)\([^)]*\)\s*\{([^}]+)\}'
+            matches = re.finditer(function_pattern, content, re.DOTALL)
+            
+            for match in matches:
+                scenario = match.group(1).strip()
+                description = match.group(2).strip()
+                function_name = match.group(3).strip()
+                function_body = match.group(4).strip()
+                
+                # Extract test steps and expected results from comments
+                test_steps = ""
+                expected_result = ""
+                input_values = ""
+                
+                # Look for TODO comments with test implementation hints
+                todo_matches = re.findall(r'/\*\s*([^*]+)\*/', function_body)
+                for comment in todo_matches:
+                    comment = comment.strip()
+                    if 'input' in comment.lower() or '=' in comment:
+                        input_values = comment
+                    elif 'expected' in comment.lower():
+                        expected_result = comment
+                    elif 'test' in comment.lower():
+                        test_steps += comment + " "
+                
+                test_cases.append({
+                    'Test Case ID': f"TC_{len(test_cases)+1:03d}",
+                    'Function Name': function_name,
+                    'Test Scenario': scenario or description,
+                    'Input Values': input_values,
+                    'Pre-Conditions': '',
+                    'Test Steps': test_steps,
+                    'Expected Result': expected_result,
+                    'Post-Conditions': '',
+                    'Test Type': 'Functional'
+                })
+        
+        print(f"[INFO] Parsed {len(test_cases)} test cases from {testcases_file}")
+        return test_cases
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to parse test cases: {e}")
+        return []
+
 def generate_module_tests(diff_content, pr_number):
-    prompt = """
-You are a senior C test architect. Generate practical module tests in C code format for the provided C code diff.
+    """
+    Generate module tests using Cantata++ framework.
+    This function is Cantata-only and does not support cmocka.
+    """
+    # Cantata is always enabled, no fallback to cmocka
+    print("[INFO] Generating Cantata-compatible module tests")
+    
+    # Load and parse test cases if they exist
+    testcases_file = os.path.join(GENERATED_FOLDER, f"pr_{pr_number}_testcases.md")
+    test_cases = None
+    
+    if os.path.exists(testcases_file):
+        print(f"[INFO] Loading test cases from {testcases_file}")
+        test_cases = parse_test_cases_from_markdown(testcases_file)
+    
+    cantata_result = generate_cantata_tests(diff_content, pr_number, test_cases)
 
-PR NUMBER: """ + str(pr_number) + """
+    # Save Cantata test script
+    module_name = cantata_result['module_name']
+    test_script_file = f"test_{module_name}_{pr_number}.c"
+    header_file = f"{module_name}.h"
 
-Generate 5+ practical test scenarios:
-- Test setup, action steps, and expected outputs
-- Include module initialization and error handling tests
-- Focus on function interactions within the module
-- Test boundary conditions and edge cases
-- Test overflow cases for arithmetic functions
-- Test NULL pointer handling
-- Test division by zero for division functions
+    save_to_markdown(cantata_result['test_script'], test_script_file,
+                    f"Cantata Test Script - PR #{pr_number}")
+    save_to_markdown(cantata_result['header_file'], header_file,
+                    f"Module Header - PR #{pr_number}")
 
-Output format: VALID C CODE using cmocka framework
+    print(f"[OK] Cantata test script saved to {test_script_file}")
+    print(f"[OK] Module header saved to {header_file}")
 
-/*
- * Module: [module_name]
- * Purpose: [module purpose]
- * Example: Module-Level Tests (MT) using cmocka
- *
- * Note:
- * - Separate test file (e.g., test_[module_name].c)
- * - Assumes [module].h and [module].c exist
- */
-
-#include <stdarg.h>
-#include <stddef.h>
-#include <setjmp.h>
-#include <cmocka.h>
-#include "[module_name].h"
-
-/* ---------- Test Cases ---------- */
-
-static void test_[test_name]_valid_inputs(void **state)
-{
-    (void) state;
-    [test code]
-    assert_[assertion]([expected], [actual]);
-}
-
-static void test_[test_name]_with_negative(void **state)
-{
-    (void) state;
-    [test code]
-    assert_[assertion]([expected], [actual]);
-}
-
-/* ---------- Test Runner ---------- */
-
-int main(void)
-{
-    const struct CMUnitTest tests[] = {
-        cmocka_unit_test(test_[test_name]_valid_inputs),
-        cmocka_unit_test(test_[test_name]_with_negative),
-        [more tests...]
-    };
-
-    return cmocka_run_group_tests(tests, NULL, NULL);
-}
-"""
-
-    return call_llm(prompt + "C CODE DIFF:" + diff_content)
+    # Return the test script content for reference
+    return cantata_result['test_script']
 def get_newest_pr_diff_files():
     """
     Get the newest PR diff files from the generated_tests folder.
@@ -365,15 +450,15 @@ def main(repo_name=None):
 
     1. Check for newest PR diff files in generated_tests folder
     2. Extract latest patches from these diff files
-    3. Use GLM 4.7 Flash to generate test cases for the latest patches
-    4. Use generated test cases to generate module tests in C code (cmocka framework)
+    3. Use LLM to generate test case definitions in Cantata format
+    4. Use Cantata++ framework to generate module tests
     5. Remove the PR label after test files are created
 
     Note: After poller.py has run and created diff files, workflow.py:
     - Identifies the newest PR diff files
     - Extracts only the latest patches from these diff files
-    - Uses GLM 4.7 Flash to generate test cases
-    - Generates module tests using the generated test cases
+    - Uses LLM to generate Cantata test case definitions
+    - Generates Cantata module tests using the generated definitions
     - Automatically removes the PR label when test generation is complete
     """
 
@@ -442,31 +527,27 @@ def main(repo_name=None):
     patches_count = len(latest_patches.split('\n'))
     print(f"[OK] Extracted {patches_count} lines of latest patches")
 
-    # Step 3: Use the configured LLM to generate test cases for the latest patches
-    print("\nStep 3: Generating test cases...")
+    # Step 3: Generate Cantata test case definitions using LLM
+    print("\nStep 3: Generating Cantata test case definitions...")
 
     testcases_file = f"pr_{pr_number}_testcases.md"
-    module_file_c = f"pr_{pr_number}_module_tests.c"
 
-    # Check if files already exist
-    testcases_exist = os.path.exists(testcases_file)
-    module_tests_exist = os.path.exists(module_file_c)
-
-    if testcases_exist and module_tests_exist:
-        print(f"[SKIP] Files already exist for PR #{pr_number}")
+    # Check if test case file already exists
+    if os.path.exists(os.path.join(GENERATED_FOLDER, testcases_file)):
+        print(f"[SKIP] Test case file already exists: {testcases_file}")
         # Add to processed list if not already there
         if not check_pr_processed(processed_prs, pr_number):
             processed_prs.append({
                 "pr_number": pr_number,
                 "diff_file": diff_file,
                 "testcases_file": testcases_file,
-                "module_tests_file": module_file_c,
+                "module_tests_file": None,
                 "processed_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                "status": "completed"
+                "status": "testcases_completed"
             })
         return 0
 
-    # Generate test cases
+    # Generate test cases using LLM
     try:
         print("Generating test case definitions...")
         testcases = generate_testcases(latest_patches)
@@ -476,15 +557,14 @@ def main(repo_name=None):
         print(f"[ERROR] Failed to generate test cases: {e}")
         return 0
 
-    # Step 4: Use generated test cases to generate module tests in C code (cmocka framework)
-    print("\nStep 4: Generating module tests in C code (cmocka framework)...")
+    # Step 4: Generate Cantata module tests
+    print("\nStep 4: Generating Cantata module tests...")
+
+    module_tests_file = f"test_module_{pr_number}.c"
 
     try:
         print("Generating module tests...")
-        module_tests_c = generate_module_tests(latest_patches, pr_number)
-        module_file_c = f"pr_{pr_number}_module_tests.c"
-        save_to_markdown(module_tests_c, module_file_c, f"Module Tests - PR #{pr_number}")
-        print(f"[OK] Module tests saved to {module_file_c}")
+        generate_module_tests(latest_patches, pr_number)
 
         # Step 5: Remove the PR label after test files are created
         print("\nStep 5: Removing PR label after successful test generation...")
@@ -496,13 +576,13 @@ def main(repo_name=None):
         return 0
 
     # Add to processed list
-    if os.path.exists(testcases_file) and os.path.exists(module_file_c):
+    if os.path.exists(os.path.join(GENERATED_FOLDER, testcases_file)) and os.path.exists(os.path.join(GENERATED_FOLDER, module_tests_file)):
         if not check_pr_processed(processed_prs, pr_number):
             processed_prs.append({
                 "pr_number": pr_number,
                 "diff_file": diff_file,
                 "testcases_file": testcases_file,
-                "module_tests_file": module_file_c,
+                "module_tests_file": module_tests_file,
                 "processed_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 "status": "completed"
             })

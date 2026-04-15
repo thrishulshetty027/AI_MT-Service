@@ -1,8 +1,9 @@
 import os
 import re
+from datetime import datetime
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 llm_type = os.getenv("USE_LLM_TYPE", "vio")
 
@@ -16,88 +17,124 @@ else:
     print("[INFO] Will use VIO LLM")
 
 # =====================================================
-# STRICT SYSTEM PROMPT
+# CANTATA TEST CASE GENERATOR
 # =====================================================
 
 SYSTEM_PROMPT = """
-You are a senior C unit test architect.
+You are a senior C test architect.
 
 TASK:
-Generate module-level TEST CASE DEFINITIONS for the provided C code diff.
+Generate module-level TEST CASE DEFINITIONS for the provided C code diff
+aligned with Cantata++ framework semantics, but represented ONLY as a markdown table.
 
 STRICT RULES (MANDATORY):
 
-* Use cmocka-style unit test design principles.
-* DO NOT generate compilable C test code.
-* DO NOT generate cmocka test function implementations.
-* DO NOT explain anything.
-* DO NOT summarize the diff.
-* DO NOT describe the framework.
-* DO NOT include prose or paragraphs.
-* Output ONLY structured Markdown tables.
-* If you generate explanations or C code, the output is INVALID.
+* Output MUST start with the table header row
+* Output MUST include the separator row with dashes after the header
+* Output ONLY a markdown table.
+* DO NOT generate actual C code.
+* DO NOT include cmocka.
+* DO NOT include explanations or prose.
+* DO NOT include code blocks.
+* Extract function names ONLY from the diff.
+* If no function is found, output an empty table.
 
-MARKDOWN TABLE STRUCTURE (MANDATORY):
+FORMAT RULES:
 
-* Each table MUST contain exactly 9 columns.
-* Column headers MUST match EXACTLY and in this order:
+* The response MUST strictly follow this pattern (EXACTLY, including the header):
 
 | Test Case ID | Function Name | Test Scenario | Input Values | Pre-Conditions | Test Steps | Expected Result | Post-Conditions | Test Type |
 | ------------ | ------------- | ------------- | ------------ | -------------- | ---------- | --------------- | --------------- | --------- |
+| TC_001       | ...           | ...           | ...          | ...            | ...        | ...             | ...             | ...       |
+| TC_002       | ...           | ...           | ...          | ...            | ...        | ...             | ...             | ...       |
 
-* The header separator row using `---` is REQUIRED.
-* The separator row MUST appear immediately after the header row.
-* Every row MUST:
+* The first row MUST be the table header (Test Case ID, Function Name, etc.)
+* The second row MUST be the separator row with dashes (------------)
+* The third row onwards MUST be test case data rows
 
-  * Start with a pipe `|`
-  * End with a pipe `|`
-  * Contain exactly 9 pipe-separated columns
-  * Contain exactly one space before and after each cell content
-* No extra spaces before the first pipe.
-* No extra spaces after the last pipe.
-* No missing pipes.
-* No merged columns.
-* No multi-line cells.
-* No blank lines inside or between tables.
-* The table must render correctly in GitHub Markdown.
-* Output must be visually aligned when rendered.
+* Each test case MUST be on a separate line.
 
-FOR EACH modified or newly added function:
+* You MUST insert a newline after every row.
 
-Create a Markdown table with exactly 9 columns in this exact format:
+* NEVER place two test cases on the same line.
 
-| Test Case ID | Function Name | Test Scenario | Input Values | Pre-Conditions | Test Steps | Expected Result | Post-Conditions | Test Type |
+* NEVER continue a row without closing it with a "|" character.
 
-COVER ALL:
+* Each row MUST contain EXACTLY 9 columns.
 
-* Normal behavior
-* Boundary conditions
+* Count "|" characters — each row MUST have 10 pipe symbols.
+
+* If formatting is violated, REGENERATE the entire output.
+
+* DO NOT output paragraphs under any circumstance.
+
+* DO NOT compress rows into a single line.
+
+* DO NOT wrap the table in code blocks.
+
+* DO NOT generate continuous text
+
+* EACH row MUST start with | and end with |
+
+* Use TC_001, TC_002...
+
+CRITICAL REMINDER:
+
+* ALWAYS include the table header row at the very beginning
+* ALWAYS include the separator row with dashes (| ------------ |) after the header
+* Then list all test case data rows
+
+CELL FORMATTING RULE (CRITICAL):
+
+* Each table cell MUST be a SINGLE LINE.
+* DO NOT use line breaks inside any cell.
+* Replace line breaks with " ; " separator.
+
+Example:
+
+CORRECT:
+TEST_SCRIPT_INFO: Init ; TEST CASE: Call func ; Function call: func(x) ; Coverage: branch
+
+WRONG:
+TEST_SCRIPT_INFO: Init
+TEST CASE: Call func
+Function call: func(x)
+
+* Test Steps and Expected Result MUST be written in a single line using separators like " ; "
+* DO NOT press Enter inside a row
+
+
+CANTATA ALIGNMENT (MANDATORY):
+
+* Test Steps MUST include:
+
+  * TEST_SCRIPT_INFO
+  * TEST CASE execution
+  * Function call
+  * Coverage intent
+
+* Expected Result MUST include:
+
+  * CHECK statements
+  * Expected outputs / return values
+
+TEST DESIGN COVERAGE:
+
+* Normal cases
+* Edge cases
+* Boundary values
 * Invalid inputs
-* NULL pointer handling
-* Error handling paths
-* Overflow cases (if relevant)
+* All branches
 
-Each function must have multiple test cases.
-Test Case IDs must be unique (TC_001, TC_002, etc).
-Test Case IDs must increment sequentially across all functions without resetting.
-Do NOT skip any test case IDs.
+VALIDATION:
 
-OUTPUT ORDERING RULES (MANDATORY):
+* Output MUST include the table header row
+* Output MUST include the separator row with dashes
+* Output ONLY the table
+* Ensure proper line breaks between rows
+* Regenerate if formatting is incorrect
 
-1. Generate test cases ALPHABETICALLY by Function Name
-2. Within each function, generate test cases in numerical order
-3. Group test cases by Function Name
-4. Continue numbering from the last Test Case ID without resetting
-
-VALIDATION REQUIREMENT:
-
-* If any formatting rule is violated, regenerate the entire output until all constraints are satisfied.
-* Output ONLY tables.
-* DO NOT use markdown code blocks.
-* DO NOT use backticks around the table.
-* DO NOT add any text before or after the tables.
-
-"""
+  """
 
 # =====================================================
 # GENERATOR FUNCTION
@@ -105,7 +142,7 @@ VALIDATION REQUIREMENT:
 
 def generate_testcases(diff_text):
     """
-    Generates structured cmocka-style test case tables
+    Generates structured Cantata test case definitions
     from C code diff input.
     """
 
@@ -121,13 +158,13 @@ def generate_testcases(diff_text):
 
 
 # =====================================================
-# OUTPUT CLEANER (prevents model misbehavior)
+# OUTPUT CLEANER
 # =====================================================
 
 def clean_output(text):
     """
     Removes accidental explanations or code blocks.
-    Keeps only Markdown tables.
+    Keeps only Cantata test case definitions.
     """
     # Remove markdown code blocks if present
     text = re.sub(r'```markdown\n?', '', text)
@@ -135,25 +172,47 @@ def clean_output(text):
 
     lines = text.splitlines()
     cleaned = []
-    inside_table = False
+    inside_c_code = False
 
     for line in lines:
-        # Skip lines that are not part of tables
-        if not line.strip().startswith("|"):
-            if inside_table:
-                # If we were in a table and hit non-table content, stop
-                break
+        # Check if we're starting C code block
+        if '/*' in line or 'void' in line or 'TEST_SCRIPT' in line:
+            inside_c_code = True
+            cleaned.append(line)
+
+        # Check if we're ending C code block
+        elif '*/' in line or (inside_c_code and '*/' in line):
+            cleaned.append(line)
+            inside_c_code = False
+
+        # Inside C code block, keep the content
+        elif inside_c_code:
+            cleaned.append(line)
+
+        # Skip non-C code lines
+        elif not line.strip():
+            continue
+        elif line.strip().startswith('#'):
+            continue
+        elif line.strip().startswith('```'):
             continue
 
-        # Process table lines
-        if line.strip().startswith("|"):
-            inside_table = True
-            cleaned.append(line)
-        elif inside_table and line.strip() == "":
-            # Keep empty lines within tables for formatting
-            cleaned.append(line)
-        elif inside_table:
-            # Stop if model starts writing explanations
-            break
+        # Keep empty lines for formatting
+        elif line.strip() == '':
+            if cleaned and cleaned[-1].strip():
+                cleaned.append(line)
 
     return "\n".join(cleaned).strip()
+
+
+# =====================================================
+# EXAMPLE USAGE
+# =====================================================
+
+if __name__ == "__main__":
+    print("Cantata Test Case Generator")
+    print("=" * 60)
+    print("\nThis module generates Cantata-compatible test case definitions.")
+    print("\nKey Functions:")
+    print("  - generate_testcases() : Generate Cantata test case definitions")
+    print("  - clean_output() : Clean LLM output to remove extraneous content")

@@ -3,7 +3,7 @@ import json
 import requests
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 LABEL_NAME = os.getenv("PR_LABEL", "ai-test")
@@ -227,7 +227,7 @@ def main():
         print("GITHUB_TOKEN not found in .env file")
         return
 
-    print(f"Using {os.getenv('MODEL_NAME', 'GLM 4.7 Flash')} model")
+    print(f"Using {os.getenv('MODEL_NAME', 'VIO:GPT-5-medium')} model")
     
     repo_name = get_repo_name()
     
