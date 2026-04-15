@@ -10,7 +10,7 @@ def call_glm_4_7_flash(prompt):
     """
     try:
         model_name = os.getenv("MODEL_NAME", "zai-coding-plan/glm-4.7-flash")
-        cmd = f'opencode run -m {model_name}'
+        cmd = ['opencode', 'run', '-m', model_name]
         result = subprocess.run(
             cmd,
             shell=True,
