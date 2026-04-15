@@ -8,8 +8,9 @@ load_dotenv(override=True)
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 LABEL_NAME = os.getenv("PR_LABEL", "ai-test")
 
-GENERATED_FOLDER = "generated_tests"
-PROCESSED_FILE = "processed_prs.json"
+# Updated absolute path
+GENERATED_FOLDER = r"C:/Users/uik03287/Simple-File-System/generated_tests"
+PROCESSED_FILE = r"C:/Users/uik03287/Simple-File-System/processed_prs.json"
 
 
 def ensure_generated_folder():
@@ -18,12 +19,6 @@ def ensure_generated_folder():
 
 
 def load_processed_prs():
-    """
-    Safely load processed PR numbers.
-    Supports:
-    - List format: [23, 24]
-    - Dict format: {"processed": [23, 24]}
-    """
     if os.path.exists(PROCESSED_FILE):
         try:
             with open(PROCESSED_FILE, "r") as f:
@@ -48,17 +43,10 @@ def save_processed_prs(processed_prs):
 
 
 def generate_and_post_testcases(pr_number, repo_name, diff_content):
-    """
-    Generate test cases using GLM 4.7 Flash and post as a comment on the PR
-    NOTE: This function is no longer used. Test generation is now handled by workflow.py
-    """
     return True
 
 
 def post_pr_comment(pr_number, repo_name, comment_text):
-    """
-    Post a comment on the PR using GitHub API
-    """
     url = f"https://api.github.com/repos/{repo_name}/pulls/{pr_number}/comments"
 
     headers = {
@@ -84,9 +72,6 @@ def post_pr_comment(pr_number, repo_name, comment_text):
 
 
 def get_labeled_prs(repo_name):
-    """
-    Fetch open PRs with specific label using GitHub Issues API
-    """
     url = f"https://api.github.com/repos/{repo_name}/issues"
 
     headers = {
@@ -107,18 +92,12 @@ def get_labeled_prs(repo_name):
         return []
 
     issues = response.json()
-
-    # Issues API returns both issues and PRs - filter only PRs
     prs = [issue for issue in issues if "pull_request" in issue]
 
     return prs
 
 
 def download_pr_diff_alt(repo_name, pr_number):
-    """
-    Download only the latest diff for the PR
-    Fetches PR info first to get the diff_url, then downloads the actual diff
-    """
     url = f"https://api.github.com/repos/{repo_name}/pulls/{pr_number}"
 
     headers = {
@@ -157,19 +136,16 @@ def download_pr_diff_alt(repo_name, pr_number):
 
 
 def save_diff(pr_number, repo_name, diff_content):
-    # Use short filename: pr_{number}.diff
     file_path = os.path.join(GENERATED_FOLDER, f"pr_{pr_number}.diff")
 
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(diff_content)
 
     print(f"Saved diff to {file_path}")
+    print(f"Absolute path: {os.path.abspath(file_path)}")
 
 
 def parse_github_url(url):
-    """
-    Parse GitHub URL to extract owner/repo name
-    """
     if not url:
         return None
 
@@ -190,9 +166,6 @@ def parse_github_url(url):
 
 
 def get_repo_name():
-    """
-    Ask user for GitHub repository URL and parse it
-    """
     print("\n" + "="*60)
     print("AI Test Case Generator - Multi-Repository Poller")
     print("="*60)
@@ -214,7 +187,6 @@ def get_repo_name():
         
         if not repo_name:
             print("Invalid GitHub URL format!")
-            print("   Please use: https://github.com/owner/repo or https://github.com/owner/repo.git")
             continue
         
         print(f"OK Parsed repository: {repo_name}")

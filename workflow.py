@@ -19,9 +19,8 @@ if llm_type == "glm":
 else:
     from vio_llm_client import call_vio_llm as call_llm
 
-GENERATED_FOLDER = "generated_tests"
-PROCESSED_FILE = "processed_prs.json"
-
+GENERATED_FOLDER = r"C:/Users/uik03287/Simple-File-System/generated_tests"
+PROCESSED_FILE = r"C:/Users/uik03287/Simple-File-System/processed_prs.json"
 
 DIFF_FILE = "generated_tests/pr_diff.txt"
 OUTPUT_FILE = "generated_tests/module_testcases.md"
