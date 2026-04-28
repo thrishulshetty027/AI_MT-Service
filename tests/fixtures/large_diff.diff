@@ -1,0 +1,360 @@
+diff --git a/src/sample.c b/src/sample.c
+index 1234567..abcdefg 100644
+--- a/src/sample.c
++++ b/src/sample.c
+@@ -1,10 +1,400 @@
+ #include <stdint.h>
+
++int function_1(int a, int b) {
++    int temp = 0;
++    temp = a + b;
++    return temp;
++}
++
++void function_2(uint8_t* ptr, uint32_t size) {
++    for (uint32_t i = 0; i < size; i++) {
++        ptr[i] = 0xFF;
++    }
++}
++
++float function_3(float x, float y) {
++    return x * y;
++}
++
++int function_4(int a, int b, int c, int d) {
++    int result = 0;
++    result = a + b;
++    result = result + c;
++    result = result + d;
++    return result;
++}
++
++void function_5(void) {
++    int x = 0;
++    x = x + 1;
++}
++
++int function_6(int param) {
++    return param * 2;
++}
++
++void function_7(int* ptr) {
++    if (ptr != NULL) {
++        *ptr = 0;
++    }
++}
++
++float function_8(float value) {
++    return value / 2.0f;
++}
++
++int function_9(int a, int b) {
++    int temp = 0;
++    if (a > b) {
++        temp = a;
++    } else {
++        temp = b;
++    }
++    return temp;
++}
++
++void function_10(void) {
++    int x = 10;
++    int y = 20;
++    int z = x + y;
++}
++
++int function_11(int x) {
++    int result = 0;
++    for (int i = 0; i < x; i++) {
++        result += i;
++    }
++    return result;
++}
++
++float function_12(float a, float b) {
++    float result = 0.0f;
++    result = a + b;
++    return result;
++}
++
++void function_13(int* array, int size) {
++    for (int i = 0; i < size; i++) {
++        array[i] = 0;
++    }
++}
++
++int function_14(int a, int b, int c) {
++    int result = 0;
++    result = a * b;
++    result = result + c;
++    return result;
++}
++
++void function_15(void) {
++    static int counter = 0;
++    counter++;
++}
++
++float function_16(float x) {
++    return x * x;
++}
++
++int function_17(int a, int b) {
++    if (a == 0) {
++        return 0;
++    }
++    return a / b;
++}
++
++void function_18(int* ptr1, int* ptr2) {
++    if (ptr1 != NULL && ptr2 != NULL) {
++        int temp = *ptr1;
++        *ptr1 = *ptr2;
++        *ptr2 = temp;
++    }
++}
++
++int function_19(int value) {
++    int result = 0;
++    while (value > 0) {
++        result += value;
++        value--;
++    }
++    return result;
++}
++
++void function_20(int* ptr, int value) {
++    if (ptr != NULL) {
++        *ptr = value;
++    }
++}
+
++int function_21(int a, int b) {
++    return a - b;
++}
++
++void function_22(float* ptr, int size) {
++    for (int i = 0; i < size; i++) {
++        ptr[i] = 0.0f;
++    }
++}
++
++int function_23(int a, int b, int c) {
++    int result = 0;
++    result = a + b + c;
++    return result;
++}
++
++void function_24(void) {
++    int x = 5;
++    int y = 10;
++}
++
++float function_25(float x, float y) {
++    return x / y;
++}
++
++int function_26(int a) {
++    int result = 1;
++    for (int i = 1; i <= a; i++) {
++        result *= i;
++    }
++    return result;
++}
++
++void function_27(int* ptr, int size, int value) {
++    for (int i = 0; i < size; i++) {
++        ptr[i] = value;
++    }
++}
++
++int function_28(int a, int b) {
++    int result = a;
++    for (int i = 0; i < b; i++) {
++        result += a;
++    }
++    return result;
++}
++
++float function_29(float x) {
++    float result = 0.0f;
++    for (int i = 0; i < 10; i++) {
++        result += x;
++    }
++    return result;
++}
++
++void function_30(int* ptr1, int* ptr2, int size) {
++    for (int i = 0; i < size; i++) {
++        ptr1[i] = ptr2[i];
++    }
++}
++
++int function_31(int a) {
++    return -a;
++}
++
++void function_32(int* ptr, int size) {
++    for (int i = 0; i < size; i++) {
++        ptr[i] = i;
++    }
++}
++
++float function_33(float x, int n) {
++    float result = 1.0f;
++    for (int i = 0; i < n; i++) {
++        result *= x;
++    }
++    return result;
++}
++
++int function_34(int a, int b) {
++    while (b != 0) {
++        int temp = b;
++        b = a % b;
++        a = temp;
++    }
++    return a;
++}
++
++void function_35(int* ptr, int size) {
++    for (int i = 0; i < size / 2; i++) {
++        int temp = ptr[i];
++        ptr[i] = ptr[size - 1 - i];
++        ptr[size - 1 - i] = temp;
++    }
++}
++
++int function_36(int a, int b) {
++    if (a < 0) a = -a;
++    if (b < 0) b = -b;
++    return a + b;
++}
++
++void function_37(float* ptr, int size) {
++    float sum = 0.0f;
++    for (int i = 0; i < size; i++) {
++        sum += ptr[i];
++    }
++    for (int i = 0; i < size; i++) {
++        ptr[i] = sum / size;
++    }
++}
++
++int function_38(int a, int b) {
++    int x = a;
++    int y = b;
++    while (y != 0) {
++        int carry = x & y;
++        x = x ^ y;
++        y = carry << 1;
++    }
++    return x;
++}
++
++void function_39(int* ptr, int size) {
++    for (int i = 1; i < size; i++) {
++        int key = ptr[i];
++        int j = i - 1;
++        while (j >= 0 && ptr[j] > key) {
++            ptr[j + 1] = ptr[j];
++            j--;
++        }
++        ptr[j + 1] = key;
++    }
++}
++
++float function_40(float x) {
++    if (x < 0.0f) return 0.0f;
++    if (x > 1.0f) return 1.0f;
++    return x;
++}
++
++int function_41(int a) {
++    int count = 0;
++    while (a != 0) {
++        count += a & 1;
++        a >>= 1;
++    }
++    return count;
++}
++
++void function_42(int* ptr, int size) {
++    int max = ptr[0];
++    for (int i = 1; i < size; i++) {
++        if (ptr[i] > max) {
++            max = ptr[i];
++        }
++    }
++    for (int i = 0; i < size; i++) {
++        ptr[i] = max;
++    }
++}
++
++int function_43(int a, int n) {
++    int result = 1;
++    for (int i = 0; i < n; i++) {
++        result *= a;
++    }
++    return result;
++}
++
++void function_44(float* ptr, int size) {
++    for (int i = 0; i < size - 1; i++) {
++        for (int j = 0; j < size - i - 1; j++) {
++            if (ptr[j] > ptr[j + 1]) {
++                float temp = ptr[j];
++                ptr[j] = ptr[j + 1];
++                ptr[j + 1] = temp;
++            }
++        }
++    }
++}
++
++int function_45(int a) {
++    if (a <= 1) return 0;
++    for (int i = 2; i * i <= a; i++) {
++        if (a % i == 0) return 0;
++    }
++    return 1;
++}
++
++void function_46(int* ptr, int size, int value) {
++    int left = 0;
++    int right = size - 1;
++    while (left <= right) {
++        int mid = left + (right - left) / 2;
++        if (ptr[mid] == value) return;
++        if (ptr[mid] < value) left = mid + 1;
++        else right = mid - 1;
++    }
++}
++
++int function_47(int a, int b) {
++    int diff = a - b;
++    return diff * diff;
++}
++
++void function_48(int* ptr, int size) {
++    int sum = 0;
++    for (int i = 0; i < size; i++) {
++        sum += ptr[i];
++    }
++    int avg = sum / size;
++    for (int i = 0; i < size; i++) {
++        ptr[i] = ptr[i] - avg;
++    }
++}
++
++float function_49(float x) {
++    return x * x * x;
++}
++
++void function_50(int* ptr, int size) {
++    for (int i = 0; i < size; i++) {
++        if (ptr[i] < 0) {
++            ptr[i] = 0;
++        }
++    }
++}
