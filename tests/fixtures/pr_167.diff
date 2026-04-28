@@ -1,0 +1,39 @@
+diff --git a/test.c b/test.c
+index 83e50b8..c8ef04f 100644
+--- a/test.c
++++ b/test.c
+@@ -4094,3 +4094,34 @@ int isStrictlyIncreasing(int arr[], int size) {
+     return 1;
+ }
+ 
++int sumPositive(int arr[], int size) {
++    int sum = 0;
++
++    for (int i = 0; i < size; i++) {
++        if (arr[i] > 0)
++            sum += arr[i];
++    }
++
++    return sum;
++}
++
++int countNegative(int arr[], int size) {
++    int count = 0;
++
++    for (int i = 0; i < size; i++) {
++        if (arr[i] < 0)
++            count++;
++    }
++
++    return count;
++}
++
++int firstZeroIndex(int arr[], int size) {
++    for (int i = 0; i < size; i++) {
++        if (arr[i] == 0)
++            return i;
++    }
++
++    return -1;
++}
++

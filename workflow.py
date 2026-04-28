@@ -11,8 +11,8 @@ cantata_integration_enabled = os.getenv("INTEGRATE_CANTATA", "true").lower() == 
 print(f"[INFO] Using LLM type: {llm_type.upper()}")
 print(f"[INFO] Cantata integration: {'ENABLED' if cantata_integration_enabled else 'DISABLED'}")
 
-from cantata_integration import generate_cantata_tests
-from testcase_generator import generate_testcases
+from cantata_integration import generate_cantata_tests as old_generate_cantata_tests
+from testcase_generator import generate_testcases, generate_cantata_tests as new_generate_cantata_tests
 
 if llm_type == "glm":
     from glm_client import call_glm_4_7_flash as call_llm
@@ -319,13 +319,14 @@ def parse_test_cases_from_markdown(testcases_file):
 
 def generate_module_tests(diff_content, pr_number):
     """
-    Generate module tests using Cantata++ framework.
-    This function is Cantata-only and does not support cmocka.
+    Generate module tests using the new Two-Stage Cantata++ framework.
+    Stage 1: Test case definitions (markdown table)
+    Stage 2: C module test code generation
     """
-    # Cantata is always enabled, no fallback to cmocka
-    print("[INFO] Generating Cantata-compatible module tests")
+    # Cantata is always enabled, use new two-stage approach
+    print("[INFO] Generating Cantata-compatible module tests using Two-Stage Pipeline")
     
-    # Load and parse test cases if they exist
+    # Load and parse test cases from markdown file
     testcases_file = os.path.join(GENERATED_FOLDER, f"pr_{pr_number}_testcases.md")
     test_cases = None
     
@@ -333,7 +334,9 @@ def generate_module_tests(diff_content, pr_number):
         print(f"[INFO] Loading test cases from {testcases_file}")
         test_cases = parse_test_cases_from_markdown(testcases_file)
     
-    cantata_result = generate_cantata_tests(diff_content, pr_number, test_cases)
+    # Generate test cases using the new two-stage architecture from testcase_generator.py
+    # This function handles both stages internally
+    cantata_result = new_generate_cantata_tests(diff_content, pr_number, test_cases)
 
     # Save Cantata test script
     module_name = cantata_result['module_name']
@@ -547,9 +550,9 @@ def main(repo_name=None):
             })
         return 0
 
-    # Generate test cases using LLM
+    # Generate test cases using the new two-stage LLM system
     try:
-        print("Generating test case definitions...")
+        print("Stage 1: Generating test case definitions (high-fidelity)...")
         testcases = generate_testcases(latest_patches)
         save_to_markdown(testcases, testcases_file, f"Test Cases - PR #{pr_number}")
         print(f"[OK] Test cases saved to {testcases_file}")
@@ -557,13 +560,15 @@ def main(repo_name=None):
         print(f"[ERROR] Failed to generate test cases: {e}")
         return 0
 
-    # Step 4: Generate Cantata module tests
-    print("\nStep 4: Generating Cantata module tests...")
+    # Step 4: Generate Cantata module tests using Two-Stage Pipeline
+    print("\nStep 4: Generating Cantata module tests (Two-Stage)...")
+    print("  Stage 1: Test Design ->")
+    print("  Stage 2: C Code Generation ->")
 
     module_tests_file = f"test_module_{pr_number}.c"
 
     try:
-        print("Generating module tests...")
+        print("Stage 1.5: Generating C code from test cases...")
         generate_module_tests(latest_patches, pr_number)
 
         # Step 5: Remove the PR label after test files are created

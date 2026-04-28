@@ -324,20 +324,20 @@ class TestRunMultiCallPipeline:
             "code analysis output",
             '{"types": {}}',
             '{"tiers": {}}',
-            # Stage 2 (sequential)
-            "scenarios raw output",
-            "scenarios critique output",
-            "scenarios final output",
-            # Stage 3
-            "values raw output",
-            "values critique output",
-            "values final output",
-            # Stage 4
-            "stubs raw output",
-            "stubs final output",
-            # Stage 5
+            # Stage 2 (sequential) — expect_json=True
+            '{"scenarios": []}',
+            '{"issues": [], "scenarios_to_add": [], "scenario_ids_to_remove": []}',
+            '{"scenarios": [], "coverage_summary": {}}',
+            # Stage 3 — expect_json=True
+            '{"test_cases": []}',
+            '{"fixes": []}',
+            '{"test_cases": [], "needs_human_count": 0, "corrections_applied": 0}',
+            # Stage 4 — expect_json=True
+            '{"stub_configs": []}',
+            '{"stub_configs": []}',
+            # Stage 5 — expect_json=True
             '{"assembled": true}',
-            "self review result",
+            '{"self_review": {"issues_found": []}}',
         ])
         mock_llm.side_effect = lambda p: next(responses)
 
@@ -346,11 +346,11 @@ class TestRunMultiCallPipeline:
 
         assert state.call_count == 13
         assert state.code_analysis == "code analysis output"
-        assert state.scenarios_final == "scenarios final output"
-        assert state.values_final == "values final output"
-        assert state.stubs_final == "stubs final output"
+        assert state.scenarios_final == {"scenarios": [], "coverage_summary": {}}
+        assert state.values_final == {"test_cases": [], "needs_human_count": 0, "corrections_applied": 0}
+        assert state.stubs_final == {"stub_configs": []}
         assert state.assembled_json == {"assembled": True}
-        assert state.self_review_result == "self review result"
+        assert state.self_review_result == {"self_review": {"issues_found": []}}
 
     @patch("src.multi_call_pipeline.call_glm_4_7_flash")
     def test_run_multi_call_pipeline_preflight_fails(self, mock_llm):
