@@ -47,7 +47,7 @@ Plans:
 ### Phase 3: Stage 1 Generator
 **Goal**: Implement the 13-LLM call pipeline with all prompts, deterministic validators, and markdown/JSON output generation.
 **Depends on**: Phase 1, Phase 2
-**Requirements**: QUAL-01, QUAL-02, QUAL-03, QUAL-04, QUAL-06, QUAL-07, QUAL-08, QUAL-10, QUAL-11
+**Requirements**: S1-01, S1-02, S1-03, S1-04, S1-05, S1-06, S1-07, S1-08, S1-09, S1-10, S1-11, S1-12, S1-13, S1-14, S1-15, S1-16
 **Success Criteria** (what must be TRUE):
   1. All 13 LLM prompts are implemented (1A-1C, 2A-2C, 3A-3C, 4A-4B, 5A-5B)
   2. Stage 1 calls (1A, 1B, 1C) execute in parallel using ThreadPoolExecutor
@@ -56,8 +56,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — LLM prompts + deterministic validators (Calls 1A-1C, 2A-2C, 3A-3C)
-- [ ] 03-02-PLAN.md — Stub configuration + JSON assembly + self-review (Calls 4A-4B, 5A-5B)
+- [ ] 03-01-PLAN.md — Deterministic validators (scenario gap filler + value sanitizer) + real LLM prompts replacing Phase 2 placeholders
+- [ ] 03-02-PLAN.md — stage1_generator.py orchestrator + testcases.md/JSON output + integration tests
 
 ### Phase 4: Jinja2 Templates
 **Goal**: Create C89-compliant Jinja2 templates that generate compilable Cantata test scripts.
@@ -111,9 +111,9 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/2 | Ready to plan | - |
-| 2. LLM Pipeline Infrastructure | 0/1 | Ready to execute | - |
-| 3. Stage 1 Generator | 0/2 | Not started | - |
+| 1. Foundation | 2/2 | Complete | 2026-04-28 |
+| 2. LLM Pipeline Infrastructure | 1/1 | Complete | 2026-04-28 |
+| 3. Stage 1 Generator | 0/2 | Ready to execute | - |
 | 4. Jinja2 Templates | 0/1 | Not started | - |
 | 5. Stage 2 Generator | 0/2 | Not started | - |
 | 6. Integration & Quality Gates | 0/2 | Not started | - |
