@@ -9,3 +9,4 @@ __pycache__/
 nul
 .env
 .planning/
+.opencode/
