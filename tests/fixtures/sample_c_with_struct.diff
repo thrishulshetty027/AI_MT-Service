@@ -1,0 +1,26 @@
+diff --git a/src/sample.c b/src/sample.c
+index 1234567..abcdefg 100644
+--- a/src/sample.c
++++ b/src/sample.c
+@@ -1,5 +1,25 @@
+ #include <stdint.h>
+ 
++typedef struct {
++    uint8_t id;
++    uint16_t value;
++    uint32_t timestamp;
++} SensorData_t;
++
++int process_sensor(SensorData_t* sensor) {
++    if (sensor == NULL) {
++        return -1;
++    }
++    sensor->value = sensor->value + 1;
++    return 0;
++}
++
++void update_sensor(SensorData_t* sensor, uint16_t new_value) {
++    if (sensor != NULL) {
++        sensor->value = new_value;
++    }
++}

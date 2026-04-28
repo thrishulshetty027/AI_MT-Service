@@ -1,0 +1,22 @@
+diff --git a/src/sample.c b/src/sample.c
+index 1234567..abcdefg 100644
+--- a/src/sample.c
++++ b/src/sample.c
+@@ -1,5 +1,20 @@
+ #include <stdint.h>
+ 
++int add_numbers(int a, int b) {
++    return a + b;
++}
++
++uint32_t calculate_checksum(const uint8_t* data, uint32_t size) {
++    uint32_t sum = 0u;
++    for (uint32_t i = 0u; i < size; i++) {
++        sum += data[i];
++    }
++    return sum;
++}
++
++void process_data(void) {
++    int result = 0;
++}
