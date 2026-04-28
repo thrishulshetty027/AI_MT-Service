@@ -1,0 +1,17 @@
+/* Struct test case: {{ tc.scenario_id }} — {{ tc.scenario }}
+ * Param: {{ param_name }} (struct {{ struct_name }})
+ */
+    {{ struct_type }} {{ param_name }};
+{% for fname, fval in tc.inputs[param_name].items() %}
+    {{ param_name }}.{{ fname }} = {{ fval }};
+{% endfor %}
+{% if tc.return_type != "void" %}
+    {{ tc.return_type }} result;
+{% endif %}
+
+{% if tc.return_type != "void" %}
+    result = {{ tc.function_name }}({{ call_args | join(', ') }});
+    CHECK_INT({{ tc.expected_return }}, result);
+{% else %}
+    {{ tc.function_name }}({{ call_args | join(', ') }});
+{% endif %}

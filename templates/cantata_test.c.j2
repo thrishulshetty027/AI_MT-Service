@@ -1,0 +1,144 @@
+/*****************************************************************************
+ *                          Cantata Test Script                              *
+ *****************************************************************************/
+/*
+ *    Filename: test_{{ module_name }}_{{ pr_number }}.c
+ *    Generated from: pr_{{ pr_number }}
+ *    Generated at: {{ timestamp }}
+ *
+ *    AI-generated test cases for PR #{{ pr_number }}
+ *****************************************************************************/
+
+#define TEST_SCRIPT_GENERATOR 2
+
+#include "module_{{ pr_number }}.h"
+#include <cantpp.h>
+{% if has_float_tests %}
+#include <math.h>
+{% endif %}
+
+/* pragma ipl cantata++ testscript start */
+
+/* Extern declarations */
+{% for sig in function_signatures %}
+extern {{ sig.return_type }} {{ sig.name }}({{ sig.params | join(', ') }});
+{% endfor %}
+
+{% for hal_func in hal_stubs %}
+extern void {{ hal_func }}(void);
+{% endfor %}
+
+/* Prototypes for test functions */
+{% for tc in test_cases %}
+void test_{{ tc.scenario_id }}(void);
+{% endfor %}
+
+void run_tests(void);
+
+{% for tc in test_cases %}
+/*****************************************************************************
+ * Test Case: {{ tc.scenario_id }} — {{ tc.scenario }}
+ * Function: {{ tc.function_name }}
+ * Type: {{ tc.test_type }}
+ * Intent: {{ tc.intent }}
+ *****************************************************************************/
+void test_{{ tc.scenario_id }}(void)
+{
+{% for stub_name, stub_cfg in tc.stubs.items() %}
+    INITIALISE_STUB_RETURN({{ stub_name }}, {{ stub_cfg.return_value }});
+{% for param_name, param_val in stub_cfg.output_params.items() %}
+    INITIALISE_STUB_POINTER_PARAM({{ stub_name }}, {{ param_name }}, {{ param_val }});
+{% endfor %}
+{% endfor %}
+
+    /* Variable declarations */
+{% for decl in tc.param_declarations %}
+    {{ decl.ctype }} {{ decl.name }};
+{% endfor %}
+{% if tc.return_type != "void" %}
+    {{ tc.return_type }} result;
+{% endif %}
+
+    /* Input initialization */
+{% for init in tc.param_initializations %}
+{% if init.is_struct %}
+    {{ init.name }}.{{ init.field_name }} = {{ init.field_value }};
+{% elif init.is_array %}
+    {{ init.name }} = {{ init.value }};
+    {{ init.size_var }} = {{ init.size_val }};
+{% else %}
+    {{ init.name }} = {{ init.value }};
+{% endif %}
+{% endfor %}
+
+    /* Execute test */
+{% if tc.return_type != "void" %}
+    result = {{ tc.function_name }}({{ tc.call_arguments | join(', ') }});
+
+    /* Check result */
+{% if tc.is_float_check %}
+    CHECK_DOUBLE({{ tc.expected_return }}, result, {{ tc.float_tolerance }});
+{% else %}
+    CHECK_INT({{ tc.expected_return }}, result);
+{% endif %}
+{% else %}
+    (void){{ tc.function_name }}({{ tc.call_arguments | join(', ') }});
+
+    /* Check output parameters */
+{% for out_name, out_val in tc.expected_output_params.items() %}
+    CHECK_INT({{ out_val }}, {{ out_name }});
+{% endfor %}
+{% endif %}
+
+{% for stub_name, stub_cfg in tc.stubs.items() %}
+    CHECK_N_CALLS({{ stub_name }}, {{ stub_cfg.expected_call_count }});
+{% endfor %}
+}
+
+{% endfor %}
+/*****************************************************************************
+ * Coverage Analysis
+ *****************************************************************************/
+static void rule_set(char* cppca_sut, char* cppca_context)
+{
+#ifdef CANTPP_SUBSET_DEFERRED_ANALYSIS
+    TEST_SCRIPT_WARNING("Coverage Rule Set ignored in deferred analysis mode\n");
+#elif CANTPP_INSTRUMENTATION_DISABLED
+    TEST_SCRIPT_WARNING("Instrumentation has been disabled\n");
+#else
+    ANALYSIS_CHECK("100% Entry Point Coverage", cppca_entrypoint_cov, 100.0);
+    ANALYSIS_CHECK("100% Statement Coverage", cppca_statement_cov, 100.0);
+    ANALYSIS_CHECK("100% Call Return Coverage", cppca_callreturn_cov, 100.0);
+    ANALYSIS_CHECK("100% Decision Coverage", cppca_decision_cov, 100.0);
+    REPORT_COVERAGE(cppca_entrypoint_cov|cppca_statement_cov|cppca_callreturn_cov|cppca_decision_cov,
+                    cppca_sut,
+                    cppca_all_details|cppca_include_catch,
+                    cppca_context);
+#endif
+}
+
+/*****************************************************************************
+ * Program Entry Point
+ *****************************************************************************/
+int main(void)
+{
+    OPEN_LOG("test_{{ module_name }}_{{ pr_number }}.ctr", FALSE, 100);
+    START_SCRIPT("{{ module_name }}", TRUE);
+
+    run_tests();
+
+    return !END_SCRIPT(TRUE);
+}
+
+/*****************************************************************************
+ * Test Control
+ *****************************************************************************/
+void run_tests(void)
+{
+{% for tc in test_cases %}
+    test_{{ tc.scenario_id }}();
+{% endfor %}
+
+    rule_set("*", "*");
+    EXPORT_COVERAGE("test_{{ module_name }}_{{ pr_number }}.cov", cppca_export_replace);
+}
