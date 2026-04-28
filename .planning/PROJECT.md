@@ -2,70 +2,76 @@
 
 ## What This Is
 
-A Python service that polls GitHub PRs for C code diffs and generates compilable Cantata unit test scripts using GLM 4.7 Flash via opencode CLI. Currently, the generated .c files fail to compile because the LLM-to-C code pipeline drops test data values and produces invalid syntax.
+A Python service that generates 100% compilable Cantata v24.04 C89 test files from GitHub PR diffs containing automotive C code. Uses a 13-call GLM 4.7 Flash pipeline for intelligent test case design, followed by deterministic Jinja2 templates for code generation with MSVC17 compile validation and self-healing.
 
 ## Core Value
 
-Generated Cantata .c test files must compile and execute in Cantata v24.04 (MSVC17) without manual fixes.
+Generated Cantata .c test files must compile with zero errors on first attempt 90%+ of the time. The other 10% must compile after the self-healing retry loop.
 
 ## Requirements
 
 ### Validated
 
 - ✓ Poll GitHub PRs with labeled diffs — existing (poller.py)
-- ✓ Download and store PR diffs — existing (poller.py)
-- ✓ Generate test case definitions in markdown tables — existing (testcase_generator.py Stage 1)
-- ✓ Support GLM 4.7 Flash via opencode CLI — existing (glm_client.py)
+- ✓ GLM 4.7 Flash via opencode CLI integration — existing (glm_client.py)
 - ✓ Track processed PRs to avoid duplication — existing (processed_prs.json)
 
 ### Active
 
-- [ ] Generated .c files compile without errors in Cantata v24.04 with MSVC17
-- [ ] Array initializations use correct C syntax: `int arr[] = {1,2,3,4};` not `int arr[] = 0;`
-- [ ] Function calls use correct syntax: `sumPositive(arr, size)` not `sumPositive(arr[], size)`
-- [ ] Test data from markdown Stage 1 is faithfully transferred to C code Stage 2
-- [ ] All variables declared before use with correct types matching diff signatures
-- [ ] Struct-based functions handled with proper field initialization
-- [ ] Void return functions validated via state checks, not assigned to variables
-- [ ] Remove VIO LLM option — GLM 4.7 Flash via opencode only
-- [ ] Cantata coverage rules (100% entry point + statement + call + decision) generated correctly
-- [ ] Generated header files match actual function signatures from diff
+- [ ] Complete 13-LLM call pipeline for intelligent test case design (Stage 1)
+- [ ] Deterministic C code generation via Jinja2 templates (Stage 6)
+- [ ] Pydantic v2 schema validation for all test case data
+- [ ] tree-sitter-based C function signature extraction
+- [ ] MSVC17 compile validation with error-to-IR fix mapping
+- [ ] cppcheck static analysis integration
+- [ ] ISO 26262 traceability sidecar generation
+- [ ] Multiple entry points: full pipeline, Stage 1 only, Stage 2 only
+- [ ] Human approval workflow (REQUIRE_HUMAN_APPROVAL env var)
+- [ ] Comprehensive output: testcases.md, testcases.json, .c, .h, compile_report.json, trace.json
+- [ ] C89 compliance in all generated code (all declarations before statements, FALSE/TRUE, NULL_PTR)
+- [ ] Stub configuration for HAL/RTE functions with Cantata syntax
+- [ ] MC/DC coverage planning for ASIL-B compliance
+- [ ] Self-healing compile retry loop (up to 3 attempts)
 
 ### Out of Scope
 
-- Web UI or REST API — manual CLI workflow is fine for now
+- Web UI or REST API — CLI only
 - CI/CD integration — single user, manual trigger
-- Multi-repo support beyond current polling — not needed yet
-- Cantata Server integration (uploading results) — deferred
-- Automatic PR comment posting — deferred
+- Multi-repo support beyond current polling
+- Cantata Server integration (uploading results)
+- Automatic PR comment posting
+- Test execution — only test file generation
+- Dynamic code analysis — static analysis only
 
 ## Context
 
-- Cantata v24.04 installed at `C:\LegacyApp\qa_systems\` with MSVC17 as default compiler
-- Cantata Server running on WildFly at `localhost:8085` (available but not integrated)
-- Floating license via `ls-cantata-lm-ww-1.int.automotive-wan.com`
-- The service processes diffs from a C code project — functions like array operations, string handling, data structures
-- Generated files follow naming: `test_module_{pr}_{pr}.c`, output log `.ctr`, coverage `.cov`
-- Two-stage pipeline: Stage 1 (markdown test cases) works well; Stage 2 (C code generation) is broken — drops all test data values, produces `arr[] = 0` everywhere
-- Example of the gap: PR #167 test cases markdown correctly says `arr={1,2,3,4}, size=4, expected=10` but generated C has `int arr[] = 0; int size = 0;` for every test
+- **Target Compiler**: MSVC17 (cl.exe) with /Za flag for strict C89 compliance
+- **Cantata Version**: v24.04 installed at `C:\LegacyApp\qa_systems\`
+- **Language**: Python 3.10+ required (tree-sitter, pydantic v2, pytest 9.x)
+- **LLM Backend**: GLM 4.7 Flash via opencode CLI only
+- **Standard**: ISO 26262 ASIL-B automotive safety-critical software
+- **Generated Files**: Follow naming `test_module_{PR}_{PR}.c`, `module_{PR}.h`, `pr_{PR}_testcases.json`, `pr_{PR}_testcases.md`
 
 ## Constraints
 
 - **LLM**: GLM 4.7 Flash via opencode CLI only — no other models
-- **Runtime**: opencode CLI subprocess calls, 600s timeout
-- **Compiler target**: MSVC17 (cl.exe / link.exe), x86-Win32
-- **Language**: Python 3.8+ for the service, C11/C++ for generated tests
-- **Cantata headers**: `#include <cantpp.h>` resolves via `C:\LegacyApp\qa_systems\cantata\inc`
-- **No Cantata GUI output**: `DCANTPP_OUTPUT_FOR_GUI` removed from config
+- **Runtime**: Python 3.10+, subprocess calls for external tools (cl.exe, cppcheck)
+- **Compiler Target**: MSVC17 (cl.exe / link.exe), x86-Win32, strict C89
+- **Generated Code**: C89 only — no C++ features, no // comments, all declarations first
+- **Cantata Headers**: `#include <cantpp.h>` resolves via `C:\LegacyApp\qa_systems\cantata\inc`
+- **Dependencies**: pydantic>=2.0, jinja2>=3.1, tree-sitter>=0.20, tree-sitter-c>=0.20, cppcheck
+- **Architecture**: 13-LLM call pipeline (Stage 1) + deterministic generation (Stage 6)
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Fix Stage 2 C code generation first | Stage 1 markdown is correct; the breakdown is in converting to C | — Pending |
-| GLM 4.7 Flash only | User requirement; no VIO LLM | — Pending |
-| Keep manual CLI workflow | Single user, quality over process automation | — Pending |
-| Target MSVC17 compiler | Matches Cantata config at `C:\LegacyApp\qa_systems\` | — Pending |
+| 13-LLM call pipeline | Each call has ONE focused job — improves quality and debuggability | — Pending |
+| Deterministic Stage 6 | Zero LLM for code gen eliminates syntax errors, enables self-healing | — Pending |
+| Pydantic v2 schemas | Strict type validation catches data errors before C generation | — Pending |
+| Jinja2 partials | Reusable templates for scalar, struct, pointer, array, float tests | — Pending |
+| MSVC17 error mapping | Compile errors → IR fixes → regenerate → retry up to 3 times | — Pending |
+| Human approval workflow | Engineer reviews testcases.md before C generation (opt-in) | — Pending |
 
 ## Evolution
 
@@ -85,4 +91,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-24 after initialization*
+*Last updated: 2026-04-28 after rebuild from Tasks.md specification*
