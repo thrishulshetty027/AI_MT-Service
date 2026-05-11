@@ -1,7 +1,0 @@
-/* Stub setup for test case: {{ tc.scenario_id }} */
-{% for stub_name, stub_cfg in tc.stubs.items() %}
-    INITIALISE_STUB_RETURN({{ stub_name }}, {{ stub_cfg.return_value }});
-{% for param_name, param_val in stub_cfg.output_params.items() %}
-    INITIALISE_STUB_POINTER_PARAM({{ stub_name }}, {{ param_name }}, {{ param_val }});
-{% endfor %}
-{% endfor %}
