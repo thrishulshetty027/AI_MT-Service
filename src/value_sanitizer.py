@@ -112,6 +112,26 @@ def _fix_expected_return(value: str) -> str:
     return value
 
 
+def _is_placeholder(value: str) -> bool:
+    """Detect LLM-generated placeholder strings that aren't valid C values."""
+    if not isinstance(value, str):
+        return False
+    placeholders = [
+        r'_ptr$',              # ends with _ptr (e.g., existing_head_ptr, single_node_ptr)
+        r'_list$',             # ends with _list
+        r'^existing_',         # starts with existing_
+        r'^freed_',            # starts with freed_
+        r'^circular_',         # starts with circular_
+        r'^dangling_',         # starts with dangling_
+        r'^some_',             # starts with some_
+        r'^valid_',            # starts with valid_
+        r'^invalid_',          # starts with invalid_
+        r'^dummy_',            # starts with dummy_
+        r'^arbitrary_',        # starts with arbitrary_
+    ]
+    return any(re.search(p, value) for p in placeholders)
+
+
 def sanitize_values(test_cases_json: Any, type_map: Dict) -> Any:
     """
     Fix C literal suffixes and values deterministically.

@@ -139,14 +139,6 @@ class _ThreadSafeMock:
 
 class TestE2EFullPipeline:
 
-    def setup_method(self):
-        if os.path.exists(GENERATED_TESTS_DIR):
-            shutil.rmtree(GENERATED_TESTS_DIR)
-
-    def teardown_method(self):
-        if os.path.exists(GENERATED_TESTS_DIR):
-            shutil.rmtree(GENERATED_TESTS_DIR)
-
     @patch("src.multi_call_pipeline.call_glm_4_7_flash")
     def test_full_pipeline_produces_all_outputs(self, mock_llm):
         mock_llm.side_effect = _ThreadSafeMock(_mock_llm_responses())

@@ -52,6 +52,7 @@ C_TYPE_TO_CTYPE = {
 
     # Floating point
     "float": CType.FLOAT, "double": CType.DOUBLE,
+    "float32": CType.FLOAT, "float64": CType.DOUBLE,
     "float32_t": CType.FLOAT, "float64_t": CType.DOUBLE,
     "long double": CType.DOUBLE,
 

@@ -53,7 +53,9 @@ def validate_diff(diff_content: str) -> Tuple[bool, str | None]:
         r'\b(int|void|float|double|char|uint8_t|uint16_t|uint32_t|int8_t|int16_t|int32_t)\s+\w+\s*\(',
         r'#include\s*[<"][^>"]+[>"]',
         r'typedef\s+struct\s+\w+\s*\{',
-        r'struct\s+\w+\s*\{'
+        r'struct\s+\w+\s*\{',
+        r'\b\w+\s+\w+\s*\([^)]*\)\s*\{',
+        r'\b(uint8|uint16|uint32|sint8|sint16|sint32|boolean|float32|float64)\s+\w+',
     ]
 
     has_c_pattern = any(re.search(pattern, c_code) for pattern in c_patterns)

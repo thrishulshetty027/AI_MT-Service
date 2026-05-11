@@ -37,7 +37,7 @@ def call_glm_4_7_flash(prompt):
             f'{opencode_cmd} run -m {model_name} '
             f'--file "{temp_path}" '
             f'--format default '
-            f'"Respond to the attached file content."'
+            f'"Follow the instructions in the attached file and produce the requested output."'
         )
 
         result = subprocess.run(

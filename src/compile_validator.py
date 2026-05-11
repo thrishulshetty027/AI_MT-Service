@@ -279,7 +279,7 @@ def run_compile_loop(
         if result.get("skipped"):
             logger.info("Compilation skipped (cl.exe not available)")
             return {
-                "success": True,
+                "success": False,
                 "attempts": attempt,
                 "errors_fixed": [],
                 "skipped": True,
@@ -347,10 +347,13 @@ def run_compile_loop(
     }
 
 
+GENERATED_TESTS_DIR = "generated_tests"
+
+
 def write_compile_report(
     pr_number: str,
     compile_result: Dict[str, Any],
-    output_dir: str = "generated_tests",
+    output_dir: str = None,
 ) -> str:
     """
     Write compile report JSON.
@@ -363,6 +366,8 @@ def write_compile_report(
     Returns:
         Path to written compile report
     """
+    if output_dir is None:
+        output_dir = GENERATED_TESTS_DIR
     os.makedirs(output_dir, exist_ok=True)
     report_path = os.path.join(output_dir, f"compile_report_{pr_number}.json")
     with open(report_path, "w", encoding="utf-8") as f:

@@ -166,10 +166,13 @@ def generate_traceability(
     return trace
 
 
+GENERATED_TESTS_DIR = "generated_tests"
+
+
 def write_trace(
     trace: Dict[str, Any],
     pr_number: str,
-    output_dir: str = "generated_tests",
+    output_dir: str = None,
 ) -> str:
     """
     Write traceability JSON.
@@ -182,6 +185,8 @@ def write_trace(
     Returns:
         Path to written trace file
     """
+    if output_dir is None:
+        output_dir = GENERATED_TESTS_DIR
     os.makedirs(output_dir, exist_ok=True)
     trace_path = os.path.join(output_dir, f"trace_{pr_number}.json")
     with open(trace_path, "w", encoding="utf-8") as f:

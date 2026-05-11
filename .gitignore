@@ -1,12 +1,124 @@
+# Environment & Secrets
 .env
-generated_tests/
-processed_prs.json
+.env.*
+*.pem
+*.key
+
+# Python
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# IDE
 .vscode/
-*.pyc
-*.pyo
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
 *.log
-nul
-.env
-.planning/
-.opencode/
+logs/
+
+# Generated test outputs
+generated_tests/
+*.test.c
+*_test.c
+module_*.h
+pr_*_testcases.*
+compile_report_*.json
+cppcheck_*.txt
+trace_*.json
+human_review_*.md
+*.diff
+
+# Temporary files
+*.tmp
+*.temp
+temp_*
+debug_*
+audit_*
+concatenate_test_cases.md
+test_*.py
+vio_*.py
+cantata_integration.py
+test_format.py
+test_Vio_llm.py
+test_ollama.py
+debug_llm_output.txt
+generated_testcase.json
+audit_fixed.json
+audit_json.py
+audit_output.json
+audit_result.json
+audit_script.py
+audit_summary.txt
+debug_json.py
+temp_audited.json
+audit_fixed.json
+audit_result.json
+C*Users*audit*.json
+
+# Build artifacts
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.a
+*.lib
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Ruff
+.ruff_cache/
+
+# Planning archive (old docs)
+.planning/archive/
+.planning/codebase/
+.planning/config.json
+
+# Temporary setup guides
+OLLAMA_SETUP.md

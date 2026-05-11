@@ -169,6 +169,13 @@ def extract_testcase_file(state: PipelineState) -> TestCaseFile:
             stubs[sname] = StubConfig(**sconfig)
         tc_data_copy = {k: v for k, v in tc_data.items() if k != "stubs"}
         tc_data_copy["stubs"] = stubs
+        inputs = tc_data_copy.get("inputs", {})
+        for k, v in inputs.items():
+            if not isinstance(v, (str, dict)):
+                inputs[k] = str(v)
+        tc_data_copy["inputs"] = inputs
+        if "expected_return" in tc_data_copy and not isinstance(tc_data_copy["expected_return"], str):
+            tc_data_copy["expected_return"] = str(tc_data_copy["expected_return"])
         test_cases.append(TestCase(**tc_data_copy))
 
     tc_file = TestCaseFile(

@@ -106,13 +106,6 @@ class TestCompileWithMsvc:
 
 class TestWriteCompileReport:
 
-    def setup_method(self):
-        os.makedirs("generated_tests", exist_ok=True)
-
-    def teardown_method(self):
-        if os.path.exists("generated_tests"):
-            shutil.rmtree("generated_tests")
-
     def test_writes_report(self):
         result = {
             "compile_report": {
@@ -168,13 +161,6 @@ class TestGenerateTraceability:
 
 
 class TestWriteTrace:
-
-    def setup_method(self):
-        os.makedirs("generated_tests", exist_ok=True)
-
-    def teardown_method(self):
-        if os.path.exists("generated_tests"):
-            shutil.rmtree("generated_tests")
 
     def test_writes_trace_json(self):
         trace = {"pr_number": "T1", "module_name": "module_T1"}

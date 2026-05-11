@@ -272,14 +272,6 @@ class TestGenerateTestcasesMarkdown:
 
 class TestWriteOutputs:
 
-    def setup_method(self):
-        if os.path.exists(GENERATED_TESTS_DIR):
-            shutil.rmtree(GENERATED_TESTS_DIR)
-
-    def teardown_method(self):
-        if os.path.exists(GENERATED_TESTS_DIR):
-            shutil.rmtree(GENERATED_TESTS_DIR)
-
     def test_write_outputs_creates_files(self):
         state = _make_state_with_all_outputs()
         tc_file = extract_testcase_file(state)
@@ -389,14 +381,6 @@ class TestRunStage1WithValidators:
 
 
 class TestRunStage1Integration:
-
-    def setup_method(self):
-        if os.path.exists(GENERATED_TESTS_DIR):
-            shutil.rmtree(GENERATED_TESTS_DIR)
-
-    def teardown_method(self):
-        if os.path.exists(GENERATED_TESTS_DIR):
-            shutil.rmtree(GENERATED_TESTS_DIR)
 
     @patch("src.multi_call_pipeline.call_glm_4_7_flash")
     def test_run_stage1_full_integration(self, mock_llm):

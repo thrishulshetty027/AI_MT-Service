@@ -13,7 +13,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Union
 
-from glm_client import call_glm_4_7_flash
+# Import Ollama client instead of opencode/GLM
+try:
+    from ollama_client import call_ollama_with_retry
+    USE_OLLAMA = True
+except ImportError:
+    from glm_client import call_glm_4_7_flash as call_ollama_with_retry
+    USE_OLLAMA = False
 
 from src.scenario_validator import fill_gaps as fill_scenario_gaps, validate_scenarios
 from src.value_sanitizer import sanitize_values
@@ -108,10 +114,34 @@ def _extract_json(raw_response: str) -> dict:
     first_brace = raw_response.find('{')
     last_brace = raw_response.rfind('}')
     if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+        json_candidate = raw_response[first_brace:last_brace + 1]
+        # Try to fix common issues: trailing commas, unquoted keys
         try:
-            return json.loads(raw_response[first_brace:last_brace + 1])
+            return json.loads(json_candidate)
         except json.JSONDecodeError:
-            pass
+            # Try with trailing comma fix
+            fixed = re.sub(r',\s*}', '}', json_candidate)
+            try:
+                return json.loads(fixed)
+            except json.JSONDecodeError:
+                pass
+
+    # Strategy 4: Extract balanced braces (handles nested structures)
+    brace_count = 0
+    start = None
+    for i, char in enumerate(raw_response):
+        if char == '{':
+            if start is None:
+                start = i
+            brace_count += 1
+        elif char == '}':
+            brace_count -= 1
+            if brace_count == 0 and start is not None:
+                try:
+                    return json.loads(raw_response[start:i+1])
+                except json.JSONDecodeError:
+                    pass
+                break
 
     raise json.JSONDecodeError(
         f"Could not extract valid JSON from response (length={len(raw_response)})",
@@ -146,7 +176,7 @@ def _call_llm_focused(
     Raises:
         RuntimeError: If all retries are exhausted
     """
-    combined_prompt = f"SYSTEM INSTRUCTIONS:\n{system_prompt}\n\nUSER CONTENT:\n{user_prompt}"
+    combined_prompt = f"{system_prompt}\n\n---\n\n{user_prompt}"
 
     last_error = None
     total_attempts = max_retries + 1
@@ -162,7 +192,6 @@ def _call_llm_focused(
                 last_error = "Empty response"
                 continue
 
-            # JSON parse retry
             if expect_json:
                 try:
                     parsed = _extract_json(response)
@@ -170,8 +199,10 @@ def _call_llm_focused(
                 except json.JSONDecodeError as e:
                     logger.warning("[%s] Attempt %d/%d: JSON parse failed (%s), retrying",
                                    call_name, attempt + 1, total_attempts, str(e))
+                    logger.debug("[%s] Raw response (first 500 chars): %s",
+                                 call_name, response[:500])
                     last_error = f"JSON parse error: {e}"
-                    combined_prompt += "\n\nIMPORTANT: Your previous output was not valid JSON. Output ONLY valid JSON."
+                    combined_prompt += "\n\nOutput ONLY valid JSON. No prose, no explanation."
                     continue
 
             return response
@@ -338,6 +369,16 @@ SYSTEM_PROMPT_2A = (
     "4. What is the minimum set of tests for MC/DC on this function?\n"
     "5. Then write the scenario list.\n"
     "\n"
+    "CRITICAL CONSTRAINT — test_type field:\n"
+    "MUST use ONLY these 7 EXACT values (case-insensitive, no variations, no creative names):\n"
+    "- normal: normal operation with valid inputs\n"
+    "- boundary_min: minimum boundary value for numeric params\n"
+    "- boundary_max: maximum boundary value for numeric params\n"
+    "- null_ptr: NULL_PTR input for pointer params\n"
+    "- negative: invalid inputs that trigger error returns\n"
+    "- overflow: inputs that cause numeric overflow or wrap-around\n"
+    "- fault_injection: simulate hardware faults or corrupted state\n"
+    "\n"
     'Output ONLY this JSON:\n'
     "{\n"
     '  "scenarios": [\n'
@@ -357,6 +398,10 @@ SYSTEM_PROMPT_2A = (
 SYSTEM_PROMPT_2B = (
     "You are a test coverage critic for ASIL-B automotive software.\n"
     "Your ONLY job is to identify gaps and problems in a test scenario list.\n"
+    "\n"
+    "CRITICAL CONSTRAINT — when suggesting new scenarios, test_type MUST be:\n"
+    "One of these 7 EXACT values: normal, boundary_min, boundary_max, null_ptr, negative, overflow, fault_injection\n"
+    "No variations, no creative names.\n"
     "\n"
     "Review the scenarios for these specific issues:\n"
     "1. MISSING BRANCHES: Is every if/else covered both true and false?\n"
@@ -405,6 +450,7 @@ SYSTEM_PROMPT_2C = (
     "4. Fix every issue described in the issues list\n"
     "5. Renumber all scenario_ids sequentially: S001, S002, S003...\n"
     "6. Ensure every scenario has all required fields\n"
+    "7. test_type MUST be one of these 7 EXACT values: normal, boundary_min, boundary_max, null_ptr, negative, overflow, fault_injection\n"
     "\n"
     'Output ONLY this JSON (the complete final scenario list):\n'
     "{\n"
@@ -546,14 +592,18 @@ SYSTEM_PROMPT_4A = (
     "You are a Cantata stub configuration specialist for automotive C testing.\n"
     "Your ONLY job is to specify stub setup for every test case.\n"
     "\n"
-    "For each test case determine:\n"
-    "1. Which HAL/RTE functions does the function under test call internally?\n"
-    "   (look at the diff — these are calls inside the function body)\n"
-    "2. What should each stub return for THIS specific test scenario?\n"
-    "   - For normal tests: return success (HAL_OK, E_OK)\n"
-    "   - For fault_injection tests: return failure to simulate the fault\n"
-    "3. How many times should each stub be called in this test?\n"
-    "4. Does the stub need to set any output parameters via pointer?\n"
+    "CRITICAL RULES:\n"
+    "1. DO NOT stub the function being tested. EVER.\n"
+    "   - If test_case tests 'Adc_StartGroupConversion', do NOT stub 'Adc_StartGroupConversion'\n"
+    "   - Only stub external/hardware functions, NOT the function under test\n"
+    "2. YOU MUST STUB ALL HAL FUNCTIONS LISTED IN hal_functions.\n"
+    "   Every single test case must have stub configurations for ALL HAL functions only.\n"
+    "3. Do NOT stub any function listed in the 'functions' section.\n"
+    "\n"
+    "For each test case, configure stubs for EVERY HAL function (NOT functions under test):\n"
+    "1. return_value: success (HAL_OK, E_OK) for normal tests, failure for fault_injection\n"
+    "2. expected_call_count: 1 for most cases, adjust if multiple calls expected\n"
+    "3. output_params: {} empty unless pointer parameters are set\n"
     "\n"
     "CANTATA STUB SYNTAX REFERENCE:\n"
     "- INITIALISE_STUB_RETURN(function_name, return_value)\n"
@@ -566,20 +616,23 @@ SYSTEM_PROMPT_4A = (
     "    {\n"
     '      "scenario_id": "S001",\n'
     '      "stubs": {\n'
-    '        "HAL_ADC_Read": {\n'
+    '        "HAL_Function1": {\n'
     '          "return_value": "HAL_OK",\n'
     '          "expected_call_count": 1,\n'
-    '          "output_params": {\n'
-    '            "pData": "12000u"\n'
-    "          }\n"
+    '          "output_params": {}\n'
+    '        },\n'
+    '        "HAL_Function2": {\n'
+    '          "return_value": "HAL_OK",\n'
+    '          "expected_call_count": 1,\n'
+    '          "output_params": {}\n'
     "        }\n"
     "      }\n"
     "    }\n"
     "  ]\n"
     "}\n"
     "\n"
-    "If a test case involves no HAL calls: output empty stubs object for it.\n"
-    "Include ALL scenarios even those with no stubs.\n"
+    "RULE: Every test case must have ALL HAL functions in its stubs object.\n"
+    "Include ALL scenarios with complete stub configurations.\n"
 )
 
 SYSTEM_PROMPT_4B = (
@@ -587,18 +640,27 @@ SYSTEM_PROMPT_4B = (
     "Your job is to verify stub configurations are complete and correct,\n"
     "fix all issues, and output the final stub configuration.\n"
     "\n"
+    "CRITICAL RULES:\n"
+    "1. DO NOT stub the function being tested. REMOVE IT if present.\n"
+    "   - Functions in the 'functions' section are UNDER TEST, not HAL\n"
+    "   - Only stub functions from the hal_functions list\n"
+    "2. EVERY HAL FUNCTION MUST BE IN EVERY TEST CASE.\n"
+    "   If any HAL function is missing from any test case, ADD IT.\n"
+    "\n"
     "Verify each test case stub config:\n"
-    "1. COMPLETENESS: Is every function from hal_functions list stubbed\n"
-    "   in every test case? If the SUT calls it, it must be stubbed.\n"
-    "2. CONSISTENCY: Does the stub return value match the scenario intent?\n"
+    "1. COMPLETENESS: Is EVERY HAL function from hal_functions list stubbed\n"
+    "   in EVERY test case? If a HAL is missing, add it with default config.\n"
+    "2. EXCLUSION: Are there any FUNCTIONS UNDER TEST in stubs? REMOVE THEM.\n"
+    "   - If stub contains a function that is being tested, DELETE it from stubs\n"
+    "3. CONSISTENCY: Does the stub return value match the scenario intent?\n"
     "   fault_injection → stub returns failure code\n"
     "   normal → stub returns success code\n"
     "3. CALL COUNT: Is the expected_call_count realistic?\n"
-    "   0 is wrong if the function is called. 999 is wrong.\n"
+    "   Default to 1 if unsure.\n"
     "4. OUTPUT PARAMS: If the HAL function sets values via pointer params,\n"
-    "   are those output params configured?\n"
-    "5. MISSING STUBS: Add any HAL function that the diff shows being called\n"
-    "   but is missing from the stub config.\n"
+    "   are those output params configured? Otherwise use empty object.\n"
+    "5. ADD MISSING STUBS: If any HAL function is missing from a test case,\n"
+    "   add it with return_value='E_OK' and expected_call_count=1.\n"
     "\n"
     "Fix all issues. Output the complete corrected final stub configuration.\n"
     "\n"
@@ -607,7 +669,18 @@ SYSTEM_PROMPT_4B = (
     '  "stub_configs": [\n'
     "    {\n"
     '      "scenario_id": "S001",\n'
-    '      "stubs": { ... complete corrected stubs ... }\n'
+    '      "stubs": {\n'
+    '        "HAL_Function1": {\n'
+    '          "return_value": "E_OK",\n'
+    '          "expected_call_count": 1,\n'
+    '          "output_params": {}\n'
+    '        },\n'
+    '        "HAL_Function2": {\n'
+    '          "return_value": "E_OK",\n'
+    '          "expected_call_count": 1,\n'
+    '          "output_params": {}\n'
+    "        }\n"
+    "      }\n"
     "    }\n"
     "  ]\n"
     "}\n"
@@ -780,13 +853,18 @@ def _build_2c_user_prompt(state: PipelineState) -> str:
 
 def _build_3a_user_prompt(state: PipelineState) -> str:
     parts = []
+    parts.append("CRITICAL: NO ZERO OR DEFAULT VALUES EXCEPT WHERE APPROPRIATE.")
+    parts.append("Every test case must use MEANINGFUL test data.")
+    parts.append("NEVER initialize structs with all zeros unless testing NULL/empty state.")
+    parts.append("Examples of GOOD values: rain_intensity=50U, wiper_mode=2U, manual_override=TRUE")
+    parts.append("Examples of BAD values (DO NOT USE): rain_intensity=0U, wiper_mode=0U, manual_override=FALSE")
     if state.scenarios_final:
         parts.append(f"Final Scenarios (assign values to each):\n{state.scenarios_final if isinstance(state.scenarios_final, str) else json.dumps(state.scenarios_final, indent=2)}")
     if state.type_map:
         parts.append(f"Type Map (use ONLY these field names and respect these valid ranges):\n{json.dumps(state.type_map, indent=2)}")
     if state.macro_constants:
         parts.append(f"Project Constants (use these for boundary values):\n{json.dumps(state.macro_constants, indent=2)}")
-    parts.append("Assign concrete values. Output JSON only.")
+    parts.append("Assign meaningful concrete values. Output JSON only.")
     return "\n\n".join(parts)
 
 
@@ -853,6 +931,9 @@ def _build_5a_user_prompt(state: PipelineState) -> str:
 
 def _build_5b_user_prompt(state: PipelineState) -> str:
     parts = []
+    parts.append("CRITICAL INSTRUCTION: OUTPUT ONLY RAW JSON. NO CODE. NO EXPLANATIONS.")
+    parts.append("DO NOT write Python scripts, DO NOT use $ python, DO NOT write import statements.")
+    parts.append("Your output must start with '{' and end with '}'. Nothing else.")
     if state.type_map:
         parts.append(f"Type Map (ground truth for field names):\n{json.dumps(state.type_map, indent=2)}")
     if state.hal_functions:
@@ -862,13 +943,31 @@ def _build_5b_user_prompt(state: PipelineState) -> str:
             parts.append(f"Assembled JSON to Audit:\n{json.dumps(state.assembled_json, indent=2)}")
         else:
             parts.append(f"Assembled JSON to Audit:\n{state.assembled_json}")
-    parts.append("Audit, fix every issue, output corrected JSON with self_review. JSON only.")
+    parts.append("Audit and fix issues. Output ONLY corrected JSON with self_review field. JSON only.")
     return "\n\n".join(parts)
 
 
 # ---------------------------------------------------------------------------
 # Stage execution functions
 # ---------------------------------------------------------------------------
+
+def _build_type_map_from_signatures_safe(state: PipelineState) -> dict:
+    """Build a basic type map from function signatures when 1B fails."""
+    functions = {}
+    for sig in (state.function_signatures or []):
+        params = {}
+        for p in sig.get('parameters', []):
+            full_type = p.get('full_type', p.get('type', 'int'))
+            params[p['name']] = {
+                "c_type": full_type,
+                "is_pointer": p.get('is_pointer', False) or '*' in full_type,
+            }
+        functions[sig['name']] = {
+            "return_type": sig.get('return_type', 'void'),
+            "params": params,
+        }
+    return {"functions": functions}
+
 
 def _run_stage_1_parallel(state: PipelineState) -> PipelineState:
     """Execute Stage 1 calls (1A, 1B, 1C) in parallel via ThreadPoolExecutor."""
@@ -913,9 +1012,17 @@ def _run_stage_1_parallel(state: PipelineState) -> PipelineState:
                 result = future.result()
                 results[call_name] = (state_field, result)
             except Exception as e:
-                for f in futures:
-                    f.cancel()
-                raise RuntimeError(f"Stage 1 call '{call_name}' failed: {e}")
+                if call_name == "1B_Type_Inspector":
+                    logger.warning(
+                        "1B_Type_Inspector failed (%s) — building type map from function signatures",
+                        str(e),
+                    )
+                    sig_map = _build_type_map_from_signatures_safe(state)
+                    results[call_name] = (state_field, sig_map)
+                else:
+                    for f in futures:
+                        f.cancel()
+                    raise RuntimeError(f"Stage 1 call '{call_name}' failed: {e}")
 
     for call_name, (state_field, result) in results.items():
         setattr(state, state_field, result)

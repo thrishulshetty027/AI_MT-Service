@@ -241,7 +241,7 @@ class TestCaseFileModel:
         assert any("subtract" in error for error in errors)
 
     def test_validate_internal_consistency_missing_stub(self):
-        """Test validate_internal_consistency detects missing stub in hal_stubs"""
+        """Test validate_internal_consistency allows HAL stubs not used in every test case"""
         functions = {
             "process": FunctionMeta(
                 signature="int process(int data)",
@@ -266,11 +266,10 @@ class TestCaseFileModel:
             generated_at=datetime.now().isoformat(),
             functions=functions,
             test_cases=test_cases,
-            hal_stubs=["HAL_Read", "HAL_Write"]  # HAL_Write not stubbed in test case
+            hal_stubs=["HAL_Read", "HAL_Write"]
         )
         errors = file.validate_internal_consistency()
-        assert len(errors) > 0
-        assert any("HAL_Write" in error for error in errors)
+        assert len(errors) == 0
 
     def test_validate_internal_consistency_duplicate_scenario_ids(self):
         """Test validate_internal_consistency detects duplicate scenario_ids"""

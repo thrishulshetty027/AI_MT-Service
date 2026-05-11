@@ -24,8 +24,8 @@
 extern {{ sig.return_type }} {{ sig.name }}({{ sig.params | join(', ') }});
 {% endfor %}
 
-{% for hal_func in hal_stubs %}
-extern void {{ hal_func }}(void);
+{% for hal_sig in hal_stub_sigs %}
+extern {{ hal_sig.return_type }} {{ hal_sig.name }}({{ hal_sig.params | join(', ') }});
 {% endfor %}
 
 /* Prototypes for test functions */
@@ -78,6 +78,8 @@ void test_{{ tc.scenario_id }}(void)
     /* Check result */
 {% if tc.is_float_check %}
     CHECK_DOUBLE({{ tc.expected_return }}, result, {{ tc.float_tolerance }});
+{% elif tc.is_pointer_return %}
+    CHECK_PTR({{ tc.expected_return }}, result);
 {% else %}
     CHECK_INT({{ tc.expected_return }}, result);
 {% endif %}

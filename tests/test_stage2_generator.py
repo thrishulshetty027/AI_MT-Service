@@ -227,14 +227,6 @@ class TestRenderHeader:
 
 class TestWriteStage2Outputs:
 
-    def setup_method(self):
-        if os.path.exists(GENERATED_TESTS_DIR):
-            shutil.rmtree(GENERATED_TESTS_DIR)
-
-    def teardown_method(self):
-        if os.path.exists(GENERATED_TESTS_DIR):
-            shutil.rmtree(GENERATED_TESTS_DIR)
-
     def test_writes_c_and_h_files(self):
         tc_file = _sample_tc_file()
         written = write_stage2_outputs(tc_file, SAMPLE_TYPE_MAP)
@@ -245,14 +237,6 @@ class TestWriteStage2Outputs:
 
 
 class TestRunStage2:
-
-    def setup_method(self):
-        if os.path.exists(GENERATED_TESTS_DIR):
-            shutil.rmtree(GENERATED_TESTS_DIR)
-
-    def teardown_method(self):
-        if os.path.exists(GENERATED_TESTS_DIR):
-            shutil.rmtree(GENERATED_TESTS_DIR)
 
     def test_run_stage2_from_json_file(self):
         tc_file = _sample_tc_file()

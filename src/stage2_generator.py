@@ -65,6 +65,87 @@ def _resolve_c_type(c_type_str: str, typedef_map: Dict[str, str] = None) -> str:
     return base
 
 
+def _is_placeholder_value(value) -> bool:
+    """Detect LLM-generated placeholder strings for pointer values."""
+    if not isinstance(value, str):
+        return False
+    if value in ("NULL_PTR", "NULL", "0"):
+        return False
+    import re
+    patterns = [
+        r'_ptr$', r'_list$', r'_head$',
+        r'^existing_', r'^freed_', r'^circular_', r'^dangling_',
+        r'^some_', r'^valid_', r'^invalid_', r'^dummy_', r'^arbitrary_',
+        r'^test_', r'^post_', r'^corrupted_', r'^very_',
+    ]
+    return any(re.search(p, value) for p in patterns)
+
+
+def _build_type_map_from_signatures(function_signatures: List[Dict]) -> Dict:
+    """
+    Build a type map from actual AST-extracted function signatures.
+    
+    This is the ground truth — more reliable than the LLM-generated type map.
+    """
+    functions = {}
+    for sig in function_signatures:
+        params = {}
+        for p in sig.get('parameters', []):
+            full_type = p.get('full_type', p.get('type', 'int'))
+            params[p['name']] = {
+                "c_type": full_type,
+                "is_pointer": p.get('is_pointer', False) or '*' in full_type,
+            }
+        functions[sig['name']] = {
+            "return_type": sig.get('return_type', 'void'),
+            "params": params,
+        }
+    return {"functions": functions}
+
+
+def _merge_type_maps(llm_map: Dict, sig_map: Dict) -> Dict:
+    """
+    Merge LLM type map with signature-based type map.
+    
+    Signature map is ground truth for types. LLM map may have extra
+    struct_fields info that signatures don't.
+    """
+    if not sig_map or not sig_map.get("functions"):
+        return llm_map or {"functions": {}}
+    if not llm_map or not llm_map.get("functions"):
+        return sig_map
+
+    merged = {"functions": {}}
+    all_func_names = set(sig_map.get("functions", {}).keys()) | set(llm_map.get("functions", {}).keys())
+
+    for func_name in all_func_names:
+        sig_func = sig_map.get("functions", {}).get(func_name, {})
+        llm_func = llm_map.get("functions", {}).get(func_name, {})
+
+        merged_params = {}
+        all_param_names = set(sig_func.get("params", {}).keys()) | set(llm_func.get("params", {}).keys())
+
+        for pname in all_param_names:
+            sig_p = sig_func.get("params", {}).get(pname, {})
+            llm_p = llm_func.get("params", {}).get(pname, {})
+
+            merged_p = {
+                "c_type": sig_p.get("c_type") or llm_p.get("c_type", "int"),
+                "is_pointer": sig_p.get("is_pointer", False) or llm_p.get("is_pointer", False),
+            }
+            if "struct_fields" in llm_p:
+                merged_p["struct_fields"] = llm_p["struct_fields"]
+
+            merged_params[pname] = merged_p
+
+        merged["functions"][func_name] = {
+            "return_type": sig_func.get("return_type") or llm_func.get("return_type", "void"),
+            "params": merged_params,
+        }
+
+    return merged
+
+
 def _is_float_type(c_type_str: str) -> bool:
     ctype, _ = classify_parameter(c_type_str)
     return ctype in (CType.FLOAT, CType.DOUBLE)
@@ -80,6 +161,10 @@ def _is_pointer_type(c_type_str: str) -> bool:
     return ctype == CType.POINTER
 
 
+def _is_pointer_type_str(c_type_str: str) -> bool:
+    return '*' in c_type_str
+
+
 def _is_array_type(c_type_str: str) -> bool:
     ctype, _ = classify_parameter(c_type_str)
     return ctype == CType.ARRAY
@@ -90,6 +175,7 @@ def build_test_case_ir(
     func_meta: FunctionMeta,
     type_map: Dict,
     typedef_map: Dict[str, str] = None,
+    all_func_names: set = None,
 ) -> Dict[str, Any]:
     """
     Build intermediate representation for a single test case.
@@ -160,20 +246,74 @@ def build_test_case_ir(
             if _is_pointer_type(c_type_str):
                 has_pointer = True
                 resolved = _resolve_c_type(c_type_str, typedef_map)
-                param_declarations.append({"name": param_name, "ctype": resolved})
+                base = c_type_str.replace("*", "").strip()
+                if _is_placeholder_value(param_value):
+                    param_declarations.append({"name": param_name, "ctype": resolved})
+                    local_var = f"{param_name}_local"
+                    param_declarations.insert(
+                        len(param_declarations) - 1,
+                        {"name": local_var, "ctype": base},
+                    )
+                    param_initializations.append({
+                        "name": local_var,
+                        "is_struct": False,
+                        "value": "{0, NULL_PTR}",
+                    })
+                    param_initializations.append({
+                        "name": param_name,
+                        "is_struct": False,
+                        "value": f"&{local_var}",
+                    })
+                else:
+                    param_declarations.append({"name": param_name, "ctype": resolved})
+                    if str(param_value) == "NULL_PTR":
+                        param_initializations.append({
+                            "name": param_name,
+                            "is_struct": False,
+                            "value": "NULL_PTR",
+                        })
+                    else:
+                        local_buf = f"{param_name}_buf"
+                        param_declarations.insert(
+                            len(param_declarations) - 1,
+                            {"name": local_buf, "ctype": base},
+                        )
+                        param_initializations.append({
+                            "name": local_buf,
+                            "is_struct": False,
+                            "value": "0",
+                        })
+                        param_initializations.append({
+                            "name": param_name,
+                            "is_struct": False,
+                            "value": f"&{local_buf}",
+                        })
             else:
                 resolved = _resolve_c_type(c_type_str, typedef_map)
                 param_declarations.append({"name": param_name, "ctype": resolved})
-            param_initializations.append({
-                "name": param_name,
-                "is_struct": False,
-                "value": str(param_value),
-            })
+                param_initializations.append({
+                    "name": param_name,
+                    "is_struct": False,
+                    "value": str(param_value),
+                })
             call_arguments.append(param_name)
 
     return_type = func_meta.return_type
     is_float_return = _is_float_type(return_type)
     is_void_return = return_type.strip() == "void"
+    is_pointer_return = _is_pointer_type_str(return_type)
+
+    if all_func_names is None:
+        all_func_names = set()
+    stubs_ir = {}
+    for sname, sconfig in tc.stubs.items():
+        if sname in all_func_names:
+            continue
+        stubs_ir[sname] = {
+            "return_value": sconfig.return_value,
+            "expected_call_count": sconfig.expected_call_count,
+            "output_params": sconfig.output_params,
+        }
 
     ir = {
         "scenario_id": tc.scenario_id,
@@ -185,18 +325,12 @@ def build_test_case_ir(
         "inputs": tc.inputs,
         "expected_return": tc.expected_return,
         "expected_output_params": tc.expected_output_params,
-        "stubs": {
-            sname: {
-                "return_value": sconfig.return_value,
-                "expected_call_count": sconfig.expected_call_count,
-                "output_params": sconfig.output_params,
-            }
-            for sname, sconfig in tc.stubs.items()
-        },
+        "stubs": stubs_ir,
         "param_declarations": param_declarations,
         "param_initializations": param_initializations,
         "call_arguments": call_arguments,
         "is_float_check": is_float_return and not is_void_return,
+        "is_pointer_return": is_pointer_return and not is_void_return,
         "float_tolerance": "0.001f",
         "has_struct": has_struct,
         "has_array": has_array,
@@ -211,26 +345,15 @@ def build_signatures_ir(tc_file: TestCaseFile, type_map: Dict) -> List[Dict]:
     """Build function signature list for extern declarations."""
     signatures = []
     for func_name, meta in tc_file.functions.items():
-        func_type_info = type_map.get("functions", {}).get(func_name, {})
-        params_info = func_type_info.get("params", {})
-
-        param_strs = []
-        for tc in tc_file.test_cases:
-            if tc.function_name == func_name:
-                for pname in tc.inputs:
-                    pmeta = params_info.get(pname, {})
-                    c_type = pmeta.get("c_type", "int")
-                    resolved = _resolve_c_type(c_type)
-                    param_strs.append(f"{resolved} {pname}")
-                break
-
-        if not param_strs:
-            sig_params = meta.signature.split("(")
-            if len(sig_params) > 1:
-                param_strs = [sig_params[1].rstrip(")").strip()]
-            else:
-                param_strs = ["void"]
-
+        # Always use the raw signature as ground truth
+        sig_text = meta.signature
+        paren_idx = sig_text.find('(')
+        if paren_idx > 0:
+            param_str = sig_text[paren_idx + 1:].rstrip(')').strip()
+            param_strs = [param_str] if param_str else ["void"]
+        else:
+            param_strs = ["void"]
+        
         signatures.append({
             "name": func_name,
             "return_type": meta.return_type,
@@ -250,7 +373,7 @@ def render_test_script(
 
     Args:
         tc_file: Validated TestCaseFile
-        type_map: Type map from Stage 1B
+        type_map: Type map (merged from signatures and LLM)
         typedef_map: Typedef resolution map
 
     Returns:
@@ -267,23 +390,72 @@ def render_test_script(
 
     test_case_irs = []
     has_float_tests = False
+    seen_ir_keys = set()
+    all_func_names = set(tc_file.functions.keys())
+
+    def _hashable_inputs(inputs):
+        """Convert inputs dict to hashable tuple for deduplication."""
+        parts = []
+        for k, v in sorted(inputs.items()):
+            if isinstance(v, dict):
+                # Handle nested dicts
+                nested_parts = []
+                for nk, nv in sorted(v.items()):
+                    if isinstance(nv, list):
+                        nested_parts.append((nk, tuple(nv)))
+                    elif isinstance(nv, dict):
+                        nested_parts.append((nk, _hashable_inputs(nv)))
+                    else:
+                        nested_parts.append((nk, str(nv)))
+                parts.append((k, tuple(nested_parts)))
+            elif isinstance(v, list):
+                parts.append((k, tuple(v)))
+            else:
+                parts.append((k, str(v)))
+        return tuple(parts)
 
     for func_name, meta in tc_file.functions.items():
         func_tests = [tc for tc in tc_file.test_cases if tc.function_name == func_name]
         for tc in func_tests:
-            ir = build_test_case_ir(tc, meta, type_map, typedef_map)
+            ir = build_test_case_ir(tc, meta, type_map, typedef_map, all_func_names)
+            dedup_key = (ir["function_name"], ir["test_type"], ir["expected_return"],
+                         _hashable_inputs(ir["inputs"]))
+            if dedup_key in seen_ir_keys:
+                continue
+            seen_ir_keys.add(dedup_key)
             test_case_irs.append(ir)
             if ir["is_float_check"]:
                 has_float_tests = True
 
     signatures = build_signatures_ir(tc_file, type_map)
 
+    hal_stub_sigs = []
+    for stub_name in tc_file.hal_stubs:
+        if stub_name in all_func_names:
+            continue
+        stub_type_info = type_map.get("functions", {}).get(stub_name, {})
+        if stub_type_info:
+            stub_params = []
+            for pname, pmeta in stub_type_info.get("params", {}).items():
+                stub_params.append(f"{pmeta.get('c_type', 'void*')} {pname}")
+            hal_stub_sigs.append({
+                "name": stub_name,
+                "return_type": stub_type_info.get("return_type", "void"),
+                "params": stub_params if stub_params else ["void"],
+            })
+        else:
+            hal_stub_sigs.append({
+                "name": stub_name,
+                "return_type": "void",
+                "params": ["void"],
+            })
+
     context = {
         "module_name": tc_file.module_name,
         "pr_number": tc_file.pr_number,
         "timestamp": tc_file.generated_at,
         "function_signatures": signatures,
-        "hal_stubs": tc_file.hal_stubs,
+        "hal_stub_sigs": hal_stub_sigs,
         "has_float_tests": has_float_tests,
         "test_cases": test_case_irs,
     }
@@ -297,7 +469,7 @@ def render_header(tc_file: TestCaseFile, type_map: Dict) -> str:
 
     Args:
         tc_file: Validated TestCaseFile
-        type_map: Type map from Stage 1B
+        type_map: Type map (merged from signatures and LLM)
 
     Returns:
         Complete .h file content as string
@@ -368,14 +540,16 @@ def run_stage2(
     json_path: str,
     type_map: Optional[Dict] = None,
     typedef_map: Optional[Dict[str, str]] = None,
+    function_signatures: Optional[List[Dict]] = None,
 ) -> Dict[str, str]:
     """
     Main entry point for Stage 2 — generate C code from testcases.json.
 
     Args:
         json_path: Path to testcases.json
-        type_map: Optional type map (extracted from JSON if not provided)
+        type_map: Optional type map from LLM (Stage 1B)
         typedef_map: Optional typedef map
+        function_signatures: Optional actual signatures from AST (ground truth)
 
     Returns:
         Dict with generated file paths
@@ -386,13 +560,18 @@ def run_stage2(
     """
     tc_file = load_testcase_file(json_path)
 
-    if type_map is None:
-        type_map = _extract_type_map_from_testcases(tc_file)
+    if function_signatures:
+        sig_map = _build_type_map_from_signatures(function_signatures)
+        merged_map = _merge_type_maps(type_map or {}, sig_map)
+    elif type_map:
+        merged_map = type_map
+    else:
+        merged_map = _extract_type_map_from_testcases(tc_file)
 
     if typedef_map is None:
         typedef_map = {}
 
-    written = write_stage2_outputs(tc_file, type_map, typedef_map)
+    written = write_stage2_outputs(tc_file, merged_map, typedef_map)
 
     return {
         **written,

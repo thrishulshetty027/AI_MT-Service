@@ -71,28 +71,54 @@ def _extract_function_signatures(node, code: str) -> List[Dict]:
         code: Clean C code string
 
     Returns:
-        List of function signature dicts with name, return_type, parameters
+        List of function signature dicts with name, return_type, parameters,
+        and full_signature (exact original C signature string)
     """
     functions = []
 
+    def _get_type_str(n):
+        if n.type in ('primitive_type', 'type_identifier', 'sized_type_specifier'):
+            return code[n.start_byte:n.end_byte]
+        if n.type == 'struct_specifier':
+            parts = []
+            for child in n.children:
+                if child.type == 'struct':
+                    parts.append('struct')
+                elif child.type == 'type_identifier':
+                    parts.append(code[child.start_byte:child.end_byte])
+            return ' '.join(parts) if parts else None
+        return None
+
     def traverse(n):
         if n.type == 'function_definition':
-            # Extract function signature
             func_name = None
             return_type = None
             parameters = []
+            is_pointer_return = False
 
-            # Find type specifier (return type) and function_declarator
             for child in n.children:
-                if child.type == 'primitive_type' or child.type == 'type_identifier' or child.type == 'sized_type_specifier':
-                    return_type = code[child.start_byte:child.end_byte]
+                type_str = _get_type_str(child)
+                if type_str:
+                    return_type = type_str
+                elif child.type == 'pointer_declarator':
+                    for subchild in child.children:
+                        if subchild.type == '*':
+                            is_pointer_return = True
+                        elif subchild.type == 'function_declarator':
+                            for sub2 in subchild.children:
+                                if sub2.type == 'identifier':
+                                    func_name = code[sub2.start_byte:sub2.end_byte]
+                                elif sub2.type == 'parameter_list':
+                                    for param in sub2.children:
+                                        if param.type == 'parameter_declaration':
+                                            param_info = _extract_parameter(param, code)
+                                            if param_info:
+                                                parameters.append(param_info)
                 elif child.type == 'function_declarator':
-                    # Find function name and parameters
                     for subchild in child.children:
                         if subchild.type == 'identifier':
                             func_name = code[subchild.start_byte:subchild.end_byte]
                         elif subchild.type == 'parameter_list':
-                            # Extract parameters
                             for param in subchild.children:
                                 if param.type == 'parameter_declaration':
                                     param_info = _extract_parameter(param, code)
@@ -100,10 +126,22 @@ def _extract_function_signatures(node, code: str) -> List[Dict]:
                                         parameters.append(param_info)
 
             if func_name:
+                full_ret = return_type or 'void'
+                if is_pointer_return:
+                    full_ret = full_ret + '*'
+
+                param_strs = []
+                for p in parameters:
+                    t = p.get('full_type', p['type'])
+                    param_strs.append(f"{t} {p['name']}")
+
+                full_sig = f"{full_ret} {func_name}({', '.join(param_strs) if param_strs else 'void'})"
+
                 functions.append({
                     'name': func_name,
-                    'return_type': return_type or 'void',
-                    'parameters': parameters
+                    'return_type': full_ret,
+                    'parameters': parameters,
+                    'full_signature': full_sig,
                 })
 
         for child in n.children:
@@ -117,25 +155,45 @@ def _extract_parameter(node, code: str) -> Optional[Dict]:
     """Extract parameter information from a parameter_declaration node."""
     param_name = None
     param_type = None
+    is_pointer = False
+
+    def _get_type_str(n):
+        if n.type in ('primitive_type', 'type_identifier', 'sized_type_specifier'):
+            return code[n.start_byte:n.end_byte]
+        if n.type == 'struct_specifier':
+            parts = []
+            for child in n.children:
+                if child.type == 'struct':
+                    parts.append('struct')
+                elif child.type == 'type_identifier':
+                    parts.append(code[child.start_byte:child.end_byte])
+            return ' '.join(parts) if parts else None
+        return None
 
     for child in node.children:
         if child.type == 'identifier':
             param_name = code[child.start_byte:child.end_byte]
-        elif child.type in ['primitive_type', 'type_identifier', 'sized_type_specifier']:
-            if not param_type:
-                param_type = code[child.start_byte:child.end_byte]
+        ts = _get_type_str(child)
+        if ts and not param_type:
+            param_type = ts
         elif child.type == 'pointer_declarator':
-            # Handle pointer parameters
+            is_pointer = True
             for subchild in child.children:
                 if subchild.type == 'identifier':
                     param_name = code[subchild.start_byte:subchild.end_byte]
-                elif subchild.type in ['primitive_type', 'type_identifier', 'sized_type_specifier']:
-                    param_type = code[subchild.start_byte:subchild.end_byte]
+                st = _get_type_str(subchild)
+                if st and not param_type:
+                    param_type = st
 
     if param_name:
+        full_type = param_type or 'void'
+        if is_pointer:
+            full_type = full_type + '*'
         return {
             'name': param_name,
-            'type': param_type or 'void'
+            'type': param_type or 'void',
+            'full_type': full_type,
+            'is_pointer': is_pointer,
         }
     return None
 
@@ -153,9 +211,18 @@ def _extract_struct_definitions(node, code: str) -> Dict[str, List[str]]:
     """
     structs = {}
 
+    def _find_field_identifier(n):
+        for child in n.children:
+            if child.type == 'field_identifier':
+                return code[child.start_byte:child.end_byte]
+            if child.type == 'pointer_declarator':
+                for sub in child.children:
+                    if sub.type == 'field_identifier':
+                        return code[sub.start_byte:sub.end_byte]
+        return None
+
     def traverse(n):
         if n.type == 'struct_specifier':
-            # Extract struct name and fields
             struct_name = None
             fields = []
 
@@ -165,44 +232,34 @@ def _extract_struct_definitions(node, code: str) -> Dict[str, List[str]]:
                 elif child.type == 'field_declaration_list':
                     for field_decl in child.children:
                         if field_decl.type == 'field_declaration':
-                            field_name = None
-                            for subchild in field_decl.children:
-                                if subchild.type == 'field_identifier':
-                                    field_name = code[subchild.start_byte:subchild.end_byte]
+                            field_name = _find_field_identifier(field_decl)
                             if field_name:
                                 fields.append(field_name)
 
-            # Only add if we found a name
-            if struct_name:
+            if struct_name and fields:
                 structs[struct_name] = fields
 
         elif n.type == 'type_definition':
-            # Handle typedef struct { ... } Name;
-            # The struct_specifier inside is anonymous, so we need to extract
-            # the typedef name and use it as the struct name
             typedef_name = None
-            struct_specifier = None
+            struct_specifier_node = None
 
             for child in n.children:
                 if child.type == 'type_identifier':
                     typedef_name = code[child.start_byte:child.end_byte]
                 elif child.type == 'struct_specifier':
-                    struct_specifier = child
+                    struct_specifier_node = child
 
-            if typedef_name and struct_specifier:
-                # Extract fields from the anonymous struct
+            if typedef_name and struct_specifier_node:
                 fields = []
-                for child in struct_specifier.children:
+                for child in struct_specifier_node.children:
                     if child.type == 'field_declaration_list':
                         for field_decl in child.children:
                             if field_decl.type == 'field_declaration':
-                                field_name = None
-                                for subchild in field_decl.children:
-                                    if subchild.type == 'field_identifier':
-                                        field_name = code[subchild.start_byte:subchild.end_byte]
+                                field_name = _find_field_identifier(field_decl)
                                 if field_name:
                                     fields.append(field_name)
-                structs[typedef_name] = fields
+                if fields:
+                    structs[typedef_name] = fields
 
         for child in n.children:
             traverse(child)
